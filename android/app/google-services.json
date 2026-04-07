@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "16245066578",
+    "project_id": "hazaribagh-pulse",
+    "storage_bucket": "hazaribagh-pulse.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:16245066578:android:62d122cda79b677b17088b",
+        "android_client_info": {
+          "package_name": "com.hazaribaghpulse.hazaribagh_pulse"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "16245066578-h512uev2ceotdv9kkqa9j085krt3usrm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAimIJztyCx0S_OiNOfKWvGVji6Nk02PaE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "16245066578-h512uev2ceotdv9kkqa9j085krt3usrm.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "16245066578-5b27fb4a5on2fc1dvbn91qlk84p68psk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.hazaribaghpulse.hazaribaghPulse"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
