@@ -49,7 +49,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             // Header
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -57,21 +57,23 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                     Text(
                       'Explore',
                       style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
                         color: colorScheme.onSurface,
-                        letterSpacing: -0.5,
+                        letterSpacing: -1.0,
+                        height: 1.1,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Discover the best of Hazaribagh',
+                      'Discover the heart of Hazaribagh',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
                         color: colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
 
                     // Search Bar
                     ExploreSearchBar(
@@ -81,7 +83,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       },
                       onFilterTap: _showFilterSheet,
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
@@ -90,10 +92,10 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             // Category Chips
             SliverToBoxAdapter(
               child: SizedBox(
-                height: 44,
+                height: 48, // slightly taller for new chips
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   children: [
                     // "All" chip
                     Padding(
@@ -130,19 +132,20 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             // Trending Tags
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Trending',
+                      'Trending Searches',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
                         color: colorScheme.onSurface,
+                        letterSpacing: -0.2,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -154,21 +157,24 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                             _searchController.text = searchTerm;
                             ref.read(exploreSearchQueryProvider.notifier).set(searchTerm);
                           },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(10),
-                              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                              borderRadius: BorderRadius.circular(20),
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.3)
+                                  : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                               border: Border.all(
-                                color: colorScheme.outline.withValues(alpha: 0.08),
+                                color: colorScheme.outline.withValues(alpha: 0.1),
                               ),
                             ),
                             child: Text(
                               tag,
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 13,
                                 color: colorScheme.onSurface,
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -183,7 +189,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             // Sort indicator + Results header
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -193,7 +199,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                         style: TextStyle(
                           fontSize: 14,
                           color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       loading: () => const SizedBox.shrink(),
@@ -202,21 +208,24 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                     GestureDetector(
                       onTap: _showFilterSheet,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          color: colorScheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          color: colorScheme.primary.withValues(alpha: 0.08),
+                          border: Border.all(
+                            color: colorScheme.primary.withValues(alpha: 0.2),
+                          ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.sort_rounded, size: 14, color: colorScheme.primary),
-                            const SizedBox(width: 4),
+                            Icon(Icons.sort_rounded, size: 16, color: colorScheme.primary),
+                            const SizedBox(width: 6),
                             Text(
                               _sortLabel(sortMode),
                               style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
                                 color: colorScheme.primary,
                               ),
                             ),

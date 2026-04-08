@@ -21,22 +21,26 @@ class ExploreListingCard extends ConsumerWidget {
     final hasAuth = ref.watch(authStateChangesProvider).value != null;
     final userProfile = ref.watch(userProfileProvider);
     final isSaved = userProfile.value?.savedPlaceIds.contains(place.id) ?? false;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
       onTap: () => context.push('/listing/${place.id}'),
       child: Container(
         decoration: BoxDecoration(
           color: Theme.of(context).cardTheme.color,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: colorScheme.outline.withValues(alpha: 0.1),
+            color: place.isSponsored 
+                ? colorScheme.primary.withValues(alpha: 0.5)
+                : colorScheme.outline.withValues(alpha: isDark ? 0.2 : 0.1),
+            width: place.isSponsored ? 1.5 : 1,
           ),
-          boxShadow: Theme.of(context).brightness == Brightness.light
+          boxShadow: !isDark
               ? [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
                   ),
                 ]
               : null,
@@ -44,47 +48,67 @@ class ExploreListingCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
+            // Image with Gradient Overlay
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(19)),
               child: Stack(
                 children: [
                   Image.network(
                     place.imageUrl,
-                    height: 130,
+                    height: 140,
                     width: double.infinity,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) => Container(
-                      height: 130,
+                      height: 140,
                       width: double.infinity,
                       color: colorScheme.surfaceContainerHighest,
                       child: Icon(Icons.image_not_supported, color: colorScheme.onSurfaceVariant),
                     ),
                   ),
+                  // Dark gradient from bottom for contrast when white text is placed there
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.3),
+                            Colors.transparent,
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.4),
+                          ],
+                          stops: const [0.0, 0.3, 0.7, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
                   // Category badge
                   Positioned(
-                    top: 8,
-                    left: 8,
+                    top: 10,
+                    left: 10,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: colorScheme.surface.withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.black.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                       ),
                       child: Text(
                         place.category,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 0.3,
                         ),
                       ),
                     ),
                   ),
                   // Bookmark
                   Positioned(
-                    top: 6,
-                    right: 6,
+                    top: 8,
+                    right: 8,
                     child: _BookmarkButton(
                       isSaved: isSaved,
                       onPressed: () {
@@ -108,17 +132,29 @@ class ExploreListingCard extends ConsumerWidget {
                   // Sponsored badge
                   if (place.isSponsored)
                     Positioned(
-                      bottom: 8,
-                      left: 8,
+                      bottom: 10,
+                      left: 10,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.amber,
+                          color: colorScheme.primary,
                           borderRadius: BorderRadius.circular(6),
+                          boxShadow: [
+                            BoxShadow(
+                              color: colorScheme.primary.withValues(alpha: 0.4),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                        child: const Text(
-                          'Sponsored',
-                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black87),
+                        child: Text(
+                          'SPONSORED',
+                          style: TextStyle(
+                            fontSize: 9, 
+                            fontWeight: FontWeight.w900, 
+                            color: isDark ? colorScheme.surface : Colors.white,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                     ),
@@ -127,32 +163,35 @@ class ExploreListingCard extends ConsumerWidget {
             ),
             // Content
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     place.name,
                     style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
                       color: colorScheme.onSurface,
+                      letterSpacing: -0.3,
+                      height: 1.2,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   if (place.address.isNotEmpty)
                     Row(
                       children: [
-                        Icon(Icons.location_on, size: 12, color: colorScheme.onSurfaceVariant),
+                        Icon(Icons.location_on_rounded, size: 14, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8)),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             place.address,
                             style: TextStyle(
                               color: colorScheme.onSurfaceVariant,
-                              fontSize: 11,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -160,16 +199,17 @@ class ExploreListingCard extends ConsumerWidget {
                         ),
                       ],
                     ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const Icon(Icons.star_rounded, color: Colors.amber, size: 16),
-                      const SizedBox(width: 3),
+                      Icon(Icons.star_rounded, color: colorScheme.primary, size: 18),
+                      const SizedBox(width: 4),
                       Text(
                         place.rating.toStringAsFixed(1),
                         style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
                           color: colorScheme.onSurface,
                         ),
                       ),
@@ -177,18 +217,25 @@ class ExploreListingCard extends ConsumerWidget {
                       Text(
                         '(${place.reviewCount})',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 12,
                           color: colorScheme.onSurfaceVariant,
                         ),
                       ),
                       const Spacer(),
                       if (place.priceRange.isNotEmpty)
-                        Text(
-                          place.priceRange,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: colorScheme.primary.withValues(alpha: 0.8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            place.priceRange,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: colorScheme.primary,
+                            ),
                           ),
                         ),
                     ],

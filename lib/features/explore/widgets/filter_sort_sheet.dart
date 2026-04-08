@@ -106,26 +106,28 @@ class FilterSortSheet extends ConsumerWidget {
         ref.read(exploreSortProvider.notifier).set(mode);
         Navigator.of(context).pop();
       },
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           color: isSelected
-              ? colorScheme.primary.withValues(alpha: 0.12)
-              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              ? colorScheme.primary.withValues(alpha: 0.1)
+              : Colors.transparent,
           border: Border.all(
             color: isSelected
-                ? colorScheme.primary.withValues(alpha: 0.4)
-                : colorScheme.outline.withValues(alpha: 0.1),
+                ? colorScheme.primary.withValues(alpha: 0.5)
+                : Theme.of(context).brightness == Brightness.dark
+                    ? colorScheme.outline.withValues(alpha: 0.1)
+                    : colorScheme.outline.withValues(alpha: 0.2),
           ),
         ),
         child: Row(
           children: [
             Icon(
               icon,
-              size: 20,
+              size: 22,
               color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: 14),
@@ -135,12 +137,13 @@ class FilterSortSheet extends ConsumerWidget {
                 style: TextStyle(
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                   color: isSelected ? colorScheme.primary : colorScheme.onSurface,
-                  fontSize: 15,
+                  fontSize: 16,
+                  letterSpacing: -0.2,
                 ),
               ),
             ),
             if (isSelected)
-              Icon(Icons.check_circle, size: 20, color: colorScheme.primary),
+              Icon(Icons.check_circle_rounded, size: 22, color: colorScheme.primary),
           ],
         ),
       ),

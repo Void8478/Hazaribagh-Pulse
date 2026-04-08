@@ -59,64 +59,85 @@ class _ExploreSearchBarState extends State<ExploreSearchBar>
       scale: _scaleAnimation,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: _isFocused
-                ? colorScheme.primary.withValues(alpha: 0.5)
+                ? colorScheme.primary.withValues(alpha: 0.6)
                 : colorScheme.outline.withValues(alpha: 0.15),
-            width: _isFocused ? 2 : 1,
+            width: _isFocused ? 1.5 : 1,
           ),
-          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+          color: Theme.of(context).brightness == Brightness.dark 
+            ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.1)
+            : colorScheme.surface,
           boxShadow: _isFocused
               ? [
                   BoxShadow(
-                    color: colorScheme.primary.withValues(alpha: 0.08),
-                    blurRadius: 12,
+                    color: colorScheme.primary.withValues(alpha: 0.15),
+                    blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),
                 ]
-              : null,
+              : Theme.of(context).brightness == Brightness.light ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+              ] : null,
         ),
         child: TextField(
           controller: widget.controller,
           focusNode: _focusNode,
           onChanged: widget.onChanged,
-          style: TextStyle(color: colorScheme.onSurface),
+          style: TextStyle(
+            color: colorScheme.onSurface,
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
           decoration: InputDecoration(
             hintText: 'Search places, categories...',
             hintStyle: TextStyle(
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
               fontWeight: FontWeight.w400,
+              fontSize: 16,
             ),
-            prefixIcon: Icon(
-              Icons.search_rounded,
-              color: _isFocused
-                  ? colorScheme.primary
-                  : colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+            prefixIcon: Padding(
+              padding: const EdgeInsets.only(left: 8.0, right: 4.0),
+              child: Icon(
+                Icons.search_rounded,
+                size: 24,
+                color: _isFocused
+                    ? colorScheme.primary
+                    : colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
             ),
+            prefixIconConstraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             suffixIcon: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (widget.controller.text.isNotEmpty)
                   IconButton(
-                    icon: Icon(Icons.close, size: 18, color: colorScheme.onSurfaceVariant),
+                    icon: Icon(Icons.cancel_rounded, size: 20, color: colorScheme.onSurfaceVariant),
                     onPressed: () {
                       widget.controller.clear();
                       widget.onChanged('');
                     },
                   ),
                 if (widget.onFilterTap != null)
-                  IconButton(
-                    icon: Icon(
-                      Icons.tune_rounded,
-                      color: colorScheme.primary.withValues(alpha: 0.7),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.tune_rounded,
+                        color: _isFocused ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                      ),
+                      onPressed: widget.onFilterTap,
                     ),
-                    onPressed: widget.onFilterTap,
                   ),
               ],
             ),
             border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           ),
         ),
       ),
