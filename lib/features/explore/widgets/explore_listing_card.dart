@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/place_model.dart';
 import '../../bookmarks/providers/bookmark_providers.dart';
+import '../../profile/providers/profile_providers.dart';
 import '../../auth/services/auth_provider.dart';
 
 class ExploreListingCard extends ConsumerWidget {

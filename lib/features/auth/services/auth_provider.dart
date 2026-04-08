@@ -1,31 +1,53 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../models/user_model.dart';
+import '../../../core/network/supabase_client.dart';
 
-final firebaseAuthProvider = Provider<FirebaseAuth>((ref) {
-  return FirebaseAuth.instance;
-});
-
-// A provider to instantly detect if the user is authenticated
+// ---------------------------------------------------------------------------
+// Stream of the current Supabase user (null = signed out)
+// ---------------------------------------------------------------------------
 final authStateChangesProvider = StreamProvider<User?>((ref) {
-  return ref.watch(firebaseAuthProvider).authStateChanges();
+  return ref
+      .watch(supabaseClientProvider)
+      .auth
+      .onAuthStateChange
+      .map((event) => event.session?.user);
 });
 
+// ---------------------------------------------------------------------------
+// AuthState — single source of truth for all auth UI states
+// ---------------------------------------------------------------------------
 class AuthState {
   final bool isLoading;
-  final bool isInitializing; // Wait lock for async fetch of Google/Email profile integrity
-  final String? error;
-  final bool needsProfileCompletion; // Triggered if user lacks phone numbers on Google Auth sign ins
 
-  AuthState({
+  /// True during the one-time startup check (app open).
+  final bool isInitializing;
+
+  /// Non-null when something went wrong.
+  final String? error;
+
+  /// Google/social sign-in: user has a session but no complete profile row yet.
+  final bool needsProfileCompletion;
+
+  /// Email signup: account created, waiting for the user to click confirm link.
+  final bool emailVerificationPending;
+
+  /// Store the email used during signup so the verification screen can display it.
+  final String? pendingEmail;
+
+  /// True when login/signup succeeded AND profile is verified — trigger loading screen.
+  final bool readyForApp;
+
+  const AuthState({
     this.isLoading = false,
     this.isInitializing = false,
     this.error,
     this.needsProfileCompletion = false,
+    this.emailVerificationPending = false,
+    this.pendingEmail,
+    this.readyForApp = false,
   });
 
   AuthState copyWith({
@@ -34,273 +56,418 @@ class AuthState {
     String? error,
     bool clearError = false,
     bool? needsProfileCompletion,
+    bool? emailVerificationPending,
+    String? pendingEmail,
+    bool? readyForApp,
   }) {
     return AuthState(
       isLoading: isLoading ?? this.isLoading,
       isInitializing: isInitializing ?? this.isInitializing,
       error: clearError ? null : (error ?? this.error),
-      needsProfileCompletion: needsProfileCompletion ?? this.needsProfileCompletion,
+      needsProfileCompletion:
+          needsProfileCompletion ?? this.needsProfileCompletion,
+      emailVerificationPending:
+          emailVerificationPending ?? this.emailVerificationPending,
+      pendingEmail: pendingEmail ?? this.pendingEmail,
+      readyForApp: readyForApp ?? this.readyForApp,
     );
   }
 
   @override
   String toString() {
-    return 'AuthState(isLoading: $isLoading, isInitializing: $isInitializing, '
-           'error: $error, needsProfileCompletion: $needsProfileCompletion)';
+    return 'AuthState('
+        'isLoading: $isLoading, '
+        'isInitializing: $isInitializing, '
+        'error: $error, '
+        'needsProfileCompletion: $needsProfileCompletion, '
+        'emailVerificationPending: $emailVerificationPending, '
+        'pendingEmail: $pendingEmail, '
+        'readyForApp: $readyForApp)';
   }
 }
 
+// ---------------------------------------------------------------------------
+// AuthNotifier
+// ---------------------------------------------------------------------------
 class AuthNotifier extends Notifier<AuthState> {
-  late final FirebaseAuth _auth;
+  late final SupabaseClient _supabase;
   late final GoogleSignIn _googleSignIn;
 
   @override
   AuthState build() {
-    _auth = ref.watch(firebaseAuthProvider);
+    _supabase = ref.watch(supabaseClientProvider);
     _googleSignIn = GoogleSignIn();
-    
-    debugPrint('🔄 [AuthNotifier] build() called — starting initialization');
-    
-    // Listen to auth state changes and trigger profile verification
-    // This replaces the old synchronous currentUser check which caused the race condition
+
+    debugPrint('🔄 [AuthNotifier] build() — initializing');
     _initializeWithAuthStream();
 
-    return AuthState(isInitializing: true);
+    return const AuthState(isInitializing: true);
   }
 
-  /// Waits for the FIRST auth state emission from Firebase, then verifies the profile.
-  /// This fixes the race condition where currentUser was null before Firebase restored the session.
+  // ── Startup ──────────────────────────────────────────────────────────────
+
+  /// Waits for the first Supabase auth event on cold start, then decides state.
   Future<void> _initializeWithAuthStream() async {
     try {
-      debugPrint('🔄 [AuthNotifier] Waiting for first auth state emission...');
-      
-      // Wait for the first auth state event with a timeout
-      // This ensures we don't wait forever if Firebase auth stream is delayed
-      final user = await _auth.authStateChanges().first.timeout(
+      debugPrint('🔄 [AuthNotifier] Awaiting first auth stream event...');
+
+      final event = await _supabase.auth.onAuthStateChange.first.timeout(
         const Duration(seconds: 8),
         onTimeout: () {
-          debugPrint('⚠️ [AuthNotifier] Auth stream timed out after 8s — treating as unauthenticated');
-          return null;
+          debugPrint('⚠️ [AuthNotifier] Auth stream timed out — treating as unauthenticated');
+          throw TimeoutException('Auth stream timed out');
         },
       );
-      
-      debugPrint('🔄 [AuthNotifier] Auth state received — user: ${user?.uid ?? 'null'}');
-      
+
+      final user = event.session?.user;
+      debugPrint('🔄 [AuthNotifier] First event — user: ${user?.id ?? 'null'}');
+
       if (user == null) {
-        // No user session — release the lock, router will redirect to onboarding
-        debugPrint('✅ [AuthNotifier] No user session — initialization complete');
         state = state.copyWith(isInitializing: false);
         return;
       }
 
-      // User exists — verify their Firestore profile with a timeout
-      await _verifyUserProfile(user);
+      // Check email confirmation status
+      if (!_isEmailConfirmed(user)) {
+        debugPrint('📧 [AuthNotifier] User email not confirmed on startup');
+        state = state.copyWith(
+          isInitializing: false,
+          emailVerificationPending: true,
+          pendingEmail: user.email,
+        );
+        return;
+      }
+
+      await _verifyUserProfile(user, isStartup: true);
     } catch (e) {
       debugPrint('⚠️ [AuthNotifier] Initialization error (non-fatal): $e');
-      // Always release the lock on error — never leave the app stuck
       state = state.copyWith(isInitializing: false);
     }
   }
 
-  /// Checks if the user has a complete Firestore profile document.
-  /// Has a timeout so slow network never blocks startup forever.
-  Future<void> _verifyUserProfile(User user) async {
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /// Returns true when the Supabase user has confirmed their email.
+  bool _isEmailConfirmed(User user) {
+    // For Google OAuth users, email_confirmed_at is always set.
+    // For email/password, it is set only after the user clicks the link.
+    final confirmedAt = user.emailConfirmedAt;
+    return confirmedAt != null;
+  }
+
+  /// Checks and upserts a profile row, then signals ready.
+  Future<void> _verifyUserProfile(User user, {bool isStartup = false}) async {
     try {
-      debugPrint('🔄 [AuthNotifier] Fetching profile for user: ${user.uid}');
-      
-      // Timeout the Firestore fetch — if network is slow, don't hang forever
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get()
+      debugPrint('🔄 [AuthNotifier] Checking profile for ${user.id}');
+
+      final profile = await _supabase
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle()
           .timeout(
             const Duration(seconds: 6),
             onTimeout: () {
-              debugPrint('⚠️ [AuthNotifier] Firestore profile fetch timed out after 6s');
+              debugPrint('⚠️ [AuthNotifier] Profile fetch timed out');
               throw TimeoutException('Profile fetch timed out');
             },
           );
 
-      if (!doc.exists) {
-        debugPrint('📋 [AuthNotifier] Profile doc missing — needs profile completion');
-        state = state.copyWith(isInitializing: false, needsProfileCompletion: true);
+      if (profile == null) {
+        debugPrint('📋 [AuthNotifier] No profile row — needs completion');
+        if (isStartup) {
+          state = state.copyWith(isInitializing: false, needsProfileCompletion: true);
+        } else {
+          state = state.copyWith(isLoading: false, needsProfileCompletion: true);
+        }
         return;
       }
 
-      final data = doc.data()!;
-      if (data['phoneNumber'] == null || data['phoneNumber'].toString().trim().isEmpty) {
-        debugPrint('📋 [AuthNotifier] Phone number missing — needs profile completion');
-        state = state.copyWith(isInitializing: false, needsProfileCompletion: true);
+      final phoneNumber = profile['phone_number'];
+      if (phoneNumber == null || phoneNumber.toString().trim().isEmpty) {
+        debugPrint('📋 [AuthNotifier] Phone missing — needs completion');
+        if (isStartup) {
+          state = state.copyWith(isInitializing: false, needsProfileCompletion: true);
+        } else {
+          state = state.copyWith(isLoading: false, needsProfileCompletion: true);
+        }
         return;
       }
 
-      // Profile is complete
-      debugPrint('✅ [AuthNotifier] Profile verified — initialization complete');
-      state = state.copyWith(isInitializing: false, needsProfileCompletion: false);
+      debugPrint('✅ [AuthNotifier] Profile OK — readyForApp');
+      if (isStartup) {
+        state = state.copyWith(isInitializing: false, readyForApp: true);
+      } else {
+        state = state.copyWith(isLoading: false, readyForApp: true);
+      }
     } catch (e) {
-      debugPrint('⚠️ [AuthNotifier] Profile verification failed (non-fatal): $e');
-      // On any error (timeout, network, permission), release the lock
-      // Let the user through — profile screen handles missing data gracefully
-      state = state.copyWith(isInitializing: false, needsProfileCompletion: false);
+      debugPrint('⚠️ [AuthNotifier] Profile check failed (non-fatal): $e');
+      // On failure, allow entry to app — do not block forever.
+      if (isStartup) {
+        state = state.copyWith(isInitializing: false, readyForApp: true);
+      } else {
+        state = state.copyWith(isLoading: false, readyForApp: true);
+      }
     }
   }
 
-  // ---- GOOGLE AUTH ----
+  // ── Google Auth ───────────────────────────────────────────────────────────
+
   Future<void> signInWithGoogle() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      UserCredential userCredential;
       if (kIsWeb) {
-        final GoogleAuthProvider webProvider = GoogleAuthProvider();
-        userCredential = await _auth.signInWithPopup(webProvider);
-      } else {
-        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-        
-        if (googleUser == null) {
-          state = state.copyWith(isLoading: false);
-          return;
-        }
-
-        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-        final AuthCredential credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
-        );
-
-        userCredential = await _auth.signInWithCredential(credential);
+        await _supabase.auth.signInWithOAuth(OAuthProvider.google);
+        return;
       }
-      
-      final user = userCredential.user;
+
+      final googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        state = state.copyWith(isLoading: false);
+        return;
+      }
+
+      final googleAuth = await googleUser.authentication;
+      final accessToken = googleAuth.accessToken;
+      final idToken = googleAuth.idToken;
+
+      if (accessToken == null || idToken == null) {
+        throw 'Missing Google Auth Token';
+      }
+
+      final res = await _supabase.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken,
+        accessToken: accessToken,
+      );
+
+      final user = res.user;
       if (user != null) {
-        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-        if (!doc.exists) {
-          // Need to complete profile
-          state = state.copyWith(isLoading: false, needsProfileCompletion: true);
-          return;
-        } else {
-          final data = doc.data()!;
-          if (data['phoneNumber'] == null || data['phoneNumber'].toString().isEmpty) {
-            // Missing phone number
-            state = state.copyWith(isLoading: false, needsProfileCompletion: true);
-            return;
-          }
-        }
+        await _verifyUserProfile(user);
+      } else {
+        state = state.copyWith(isLoading: false);
       }
-
-      state = state.copyWith(isLoading: false, needsProfileCompletion: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Google Sign-In failed: ${e.toString()}');
+      state = state.copyWith(
+          isLoading: false, error: 'Google Sign-In failed: ${e.toString()}');
     }
   }
 
-  Future<void> completeGoogleProfile(String fullName, String phoneNumber) async {
+  Future<void> completeGoogleProfile(
+      String fullName, String phoneNumber) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final user = _auth.currentUser;
+      final user = _supabase.auth.currentUser;
       if (user == null) {
         state = state.copyWith(isLoading: false, error: 'User not signed in');
         return;
       }
-      
-      final uid = user.uid;
-      final now = DateTime.now();
-      
-      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      if (!doc.exists) {
-        final userModel = UserModel(
-          id: uid,
-          fullName: fullName,
-          email: user.email ?? '',
-          phoneNumber: phoneNumber,
-          authProvider: 'google',
-          avatarUrl: user.photoURL ?? '',
-          createdAt: now,
-          updatedAt: now,
-          trustLevel: 'Newcomer',
-          points: 0,
-          reviewsCount: 0,
-          photosCount: 0,
-          savedPlaceIds: [],
-          savedEventIds: [],
-        );
-        await FirebaseFirestore.instance.collection('users').doc(uid).set(userModel.toMap());
-      } else {
-        await FirebaseFirestore.instance.collection('users').doc(uid).update({
-          'fullName': fullName,
-          'phoneNumber': phoneNumber,
-          'updatedAt': Timestamp.fromDate(now),
+
+      final uid = user.id;
+      final now = DateTime.now().toIso8601String();
+
+      final existing =
+          await _supabase.from('profiles').select().eq('id', uid).maybeSingle();
+      if (existing == null) {
+        await _supabase.from('profiles').insert({
+          'id': uid,
+          'full_name': fullName,
+          'email': user.email ?? '',
+          'phone_number': phoneNumber,
+          'auth_provider': 'google',
+          'avatar_url': user.userMetadata?['avatar_url'] ?? '',
+          'created_at': now,
+          'updated_at': now,
+          'trust_level': 'Newcomer',
+          'points': 0,
+          'reviews_count': 0,
+          'photos_count': 0,
+          'saved_place_ids': [],
+          'saved_event_ids': [],
         });
+      } else {
+        await _supabase.from('profiles').update({
+          'full_name': fullName,
+          'phone_number': phoneNumber,
+          'updated_at': now,
+        }).eq('id', uid);
       }
-      
-      state = state.copyWith(isLoading: false, needsProfileCompletion: false);
+
+      state = state.copyWith(
+          isLoading: false, needsProfileCompletion: false, readyForApp: true);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Failed to complete profile: ${e.toString()}');
+      state = state.copyWith(
+          isLoading: false,
+          error: 'Failed to complete profile: ${e.toString()}');
     }
   }
 
-  // ---- EMAIL AUTH ----
+  // ── Email Auth ────────────────────────────────────────────────────────────
+
   Future<void> signInWithEmail(String email, String password) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      await _auth.signInWithEmailAndPassword(email: email, password: password);
-      state = state.copyWith(isLoading: false);
-    } on FirebaseAuthException catch (e) {
-      state = state.copyWith(isLoading: false, error: e.message ?? 'Login failed');
+      final res =
+          await _supabase.auth.signInWithPassword(email: email, password: password);
+
+      final user = res.user;
+      if (user == null) {
+        state = state.copyWith(isLoading: false, error: 'Sign-in failed. Please try again.');
+        return;
+      }
+
+      if (!_isEmailConfirmed(user)) {
+        debugPrint('📧 [AuthNotifier] Login blocked — email not confirmed');
+        state = state.copyWith(
+          isLoading: false,
+          emailVerificationPending: true,
+          pendingEmail: email,
+        );
+        return;
+      }
+
+      await _verifyUserProfile(user);
+    } on AuthException catch (e) {
+      state = state.copyWith(isLoading: false, error: e.message);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: 'An unexpected error occurred');
     }
   }
 
-  Future<void> signUpWithEmail(String fullName, String email, String phoneNumber, String password) async {
-    state = state.copyWith(isLoading: true, clearError: true);
+  Future<void> signUpWithEmail(
+      String fullName, String email, String phoneNumber, String password) async {
+    state = state.copyWith(
+        isLoading: true, clearError: true, emailVerificationPending: false);
     try {
-      final userCredential = await _auth.createUserWithEmailAndPassword(email: email, password: password);
-      
-      if (userCredential.user != null) {
-        final uid = userCredential.user!.uid;
-        final now = DateTime.now();
-        
-        final userModel = UserModel(
-          id: uid,
-          fullName: fullName,
-          email: email,
-          phoneNumber: phoneNumber,
-          authProvider: 'email',
-          avatarUrl: '',
-          createdAt: now,
-          updatedAt: now,
-          trustLevel: 'Newcomer',
-          points: 0,
-          reviewsCount: 0,
-          photosCount: 0,
-          savedPlaceIds: [],
-          savedEventIds: [],
-        );
-        
-        await FirebaseFirestore.instance.collection('users').doc(uid).set(userModel.toMap());
+      final res = await _supabase.auth.signUp(email: email, password: password);
+
+      // Try to insert profile row. If RLS blocks unconfirmed users, we catch silently.
+      if (res.user != null) {
+        final uid = res.user!.id;
+        final now = DateTime.now().toIso8601String();
+        try {
+          await _supabase.from('profiles').insert({
+            'id': uid,
+            'full_name': fullName,
+            'email': email,
+            'phone_number': phoneNumber,
+            'auth_provider': 'email',
+            'avatar_url': '',
+            'created_at': now,
+            'updated_at': now,
+            'trust_level': 'Newcomer',
+            'points': 0,
+            'reviews_count': 0,
+            'photos_count': 0,
+            'saved_place_ids': [],
+            'saved_event_ids': [],
+          });
+        } catch (profileErr) {
+          debugPrint('⚠️ [AuthNotifier] Profile insert skipped (likely RLS on unconfirmed): $profileErr');
+        }
       }
-      
-      state = state.copyWith(isLoading: false);
-    } on FirebaseAuthException catch (e) {
-      state = state.copyWith(isLoading: false, error: e.message ?? 'Sign up failed');
+
+      // session == null → email confirmation required
+      if (res.session == null) {
+        debugPrint('📧 [AuthNotifier] Signup OK — awaiting email confirmation');
+        state = state.copyWith(
+          isLoading: false,
+          emailVerificationPending: true,
+          pendingEmail: email,
+        );
+        return;
+      }
+
+      // session != null → confirmation disabled, user is immediately signed in
+      final user = res.user;
+      if (user != null) {
+        await _verifyUserProfile(user);
+      } else {
+        state = state.copyWith(isLoading: false);
+      }
+    } on AuthException catch (e) {
+      state = state.copyWith(isLoading: false, error: e.message);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'An unexpected error occurred');
+      state = state.copyWith(
+          isLoading: false, error: 'An unexpected error occurred');
     }
   }
+
+  // ── Email Verification ────────────────────────────────────────────────────
+
+  /// Resend the confirmation email.
+  Future<void> resendVerificationEmail(String email) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      await _supabase.auth.resend(
+        type: OtpType.signup,
+        email: email,
+      );
+      state = state.copyWith(isLoading: false);
+    } on AuthException catch (e) {
+      state = state.copyWith(isLoading: false, error: e.message);
+    } catch (e) {
+      state = state.copyWith(
+          isLoading: false, error: 'Failed to resend email. Try again.');
+    }
+  }
+
+  /// Called when user taps "I've verified" on EmailVerificationScreen.
+  /// Refreshes the session and checks confirmation status.
+  Future<void> checkEmailVerified() async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      // Refresh the session so we get the latest email_confirmed_at
+      await _supabase.auth.refreshSession();
+
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        state = state.copyWith(
+            isLoading: false, error: 'No session. Please log in again.');
+        return;
+      }
+
+      if (!_isEmailConfirmed(user)) {
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Email not verified yet. Please check your inbox.',
+        );
+        return;
+      }
+
+      debugPrint('✅ [AuthNotifier] Email verified — proceeding to profile check');
+      state = state.copyWith(emailVerificationPending: false);
+      await _verifyUserProfile(user);
+    } on AuthException catch (e) {
+      state = state.copyWith(isLoading: false, error: e.message);
+    } catch (e) {
+      state = state.copyWith(
+          isLoading: false, error: 'Verification check failed. Try again.');
+    }
+  }
+
+  // ── Auth Loading Screen ───────────────────────────────────────────────────
+
+  /// Called by AuthLoadingScreen when it finishes its setup tasks.
+  void markAppReady() {
+    state = state.copyWith(readyForApp: false); // reset so it doesn't re-trigger
+  }
+
+  // ── Misc ──────────────────────────────────────────────────────────────────
 
   Future<void> resetPassword(String email) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      await _auth.sendPasswordResetEmail(email: email);
+      await _supabase.auth.resetPasswordForEmail(email);
       state = state.copyWith(isLoading: false);
-    } on FirebaseAuthException catch (e) {
-      state = state.copyWith(isLoading: false, error: e.message ?? 'Password reset failed');
+    } on AuthException catch (e) {
+      state = state.copyWith(isLoading: false, error: e.message);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'An unexpected error occurred');
+      state = state.copyWith(
+          isLoading: false, error: 'An unexpected error occurred');
     }
   }
 
-  // ---- GENERAL ----
   void clearError() {
     state = state.copyWith(clearError: true);
   }
@@ -308,71 +475,43 @@ class AuthNotifier extends Notifier<AuthState> {
   Future<void> signOut() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      if (!kIsWeb) {
-        await _googleSignIn.signOut();
-      }
-      await _auth.signOut();
-      state = state.copyWith(isLoading: false);
+      if (!kIsWeb) await _googleSignIn.signOut();
+      await _supabase.auth.signOut();
+      // Reset all flags
+      state = const AuthState();
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Sign out failed: ${e.toString()}');
+      state = state.copyWith(
+          isLoading: false, error: 'Sign out failed: ${e.toString()}');
     }
   }
 
   Future<void> deleteAccount() async {
     state = state.copyWith(isLoading: true, clearError: true);
-    
     try {
-      final user = _auth.currentUser;
-      if (user == null) throw Exception("No user is currently signed in.");
+      final user = _supabase.auth.currentUser;
+      if (user == null) throw Exception('No user is currently signed in.');
 
-      final uid = user.uid;
+      final uid = user.id;
 
-      // 1. Delete associated identity record in Firestore
-      await FirebaseFirestore.instance.collection('users').doc(uid).delete();
+      // Anonymize reviews
+      await _supabase.from('reviews').update({
+        'author_name': 'Deleted User',
+        'author_image_url': '',
+      }).eq('author_id', uid);
 
-      // 2. Anonymize authored reviews so they gracefully fallback to "Deleted User" without breaking counts
-      final reviewsSnapshot = await FirebaseFirestore.instance
-          .collection('reviews')
-          .where('authorId', isEqualTo: uid)
-          .get();
-          
-      if (reviewsSnapshot.docs.isNotEmpty) {
-        final batch = FirebaseFirestore.instance.batch();
-        for (var doc in reviewsSnapshot.docs) {
-          batch.update(doc.reference, {
-            'authorName': 'Deleted User',
-            'authorImageUrl': '',
-          });
-        }
-        await batch.commit();
-      }
+      // Delete profile row
+      await _supabase.from('profiles').delete().eq('id', uid);
 
-      // 3. Erase the Firebase Auth user correctly
-      await user.delete();
-      
-      // 4. Clear Google SDK dependencies matching signOut
-      if (!kIsWeb) {
-        await _googleSignIn.signOut();
-      }
+      // Sign out (developer must add a Supabase RPC to fully delete auth.users)
+      debugPrint('ℹ️ [AuthNotifier] Implement RPC delete_user for full account removal.');
+      await _supabase.auth.signOut();
+      if (!kIsWeb) await _googleSignIn.signOut();
 
-      state = state.copyWith(isLoading: false);
-    } on FirebaseAuthException catch (e) {
-      // Catch specific reauth errors to bounce user out cleanly.
-      if (e.code == 'requires-recent-login') {
-        // Log out immediately so the router tosses them to onboarding/login
-        if (!kIsWeb) {
-          await _googleSignIn.signOut();
-        }
-        await _auth.signOut();
-        state = state.copyWith(
-          isLoading: false, 
-          error: 'requires-recent-login'
-        );
-      } else {
-        state = state.copyWith(isLoading: false, error: 'Failed to delete account: ${e.message}');
-      }
+      state = const AuthState();
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'An unexpected error occurred: ${e.toString()}');
+      state = state.copyWith(
+          isLoading: false,
+          error: 'An unexpected error occurred: ${e.toString()}');
     }
   }
 }

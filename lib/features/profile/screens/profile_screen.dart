@@ -9,6 +9,7 @@ import '../widgets/user_reviews_section.dart';
 import '../../auth/services/auth_provider.dart';
 import '../../bookmarks/providers/bookmark_providers.dart';
 
+import '../providers/profile_providers.dart';
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 

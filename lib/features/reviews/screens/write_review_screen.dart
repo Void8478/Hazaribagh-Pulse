@@ -5,7 +5,8 @@ import '../widgets/star_rating_selector.dart';
 import '../providers/review_providers.dart';
 import '../../../../models/review_model.dart';
 import '../../auth/services/auth_provider.dart';
-import '../../bookmarks/providers/bookmark_providers.dart';
+
+import '../../profile/providers/profile_providers.dart';
 
 class WriteReviewScreen extends ConsumerStatefulWidget {
   final String listingId;
@@ -52,7 +53,7 @@ class _WriteReviewScreenState extends ConsumerState<WriteReviewScreen> {
         final newReview = ReviewModel(
           id: const Uuid().v4(), // generate local ID if needed, though Firestore assigns Document ID automatically. We put one to satisfy strict model rules before cloud upload if needed.
           listingId: widget.listingId,
-          authorId: fbUser.uid,
+          authorId: fbUser.id,
           authorName: userProfile?.name ?? 'Anonymous', 
           authorImageUrl: userProfile?.avatarUrl ?? '',
           rating: _rating,

@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class PlaceModel {
   final String id;
   final String name;
@@ -35,23 +33,21 @@ class PlaceModel {
     this.description = 'A wonderful place in Hazaribagh.',
   });
 
-  factory PlaceModel.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-    
+  factory PlaceModel.fromJson(Map<String, dynamic> data) {
     return PlaceModel(
-      id: doc.id,
+      id: data['id']?.toString() ?? '',
       name: data['name'] ?? 'Unknown Place',
       category: data['category'] ?? 'Uncategorized',
-      imageUrl: data['imageUrl'] ?? 'https://via.placeholder.com/500',
-      imageUrls: List<String>.from(data['imageUrls'] ?? []),
+      imageUrl: data['image_url'] ?? data['imageUrl'] ?? 'https://via.placeholder.com/500',
+      imageUrls: List<String>.from(data['image_urls'] ?? data['imageUrls'] ?? []),
       rating: (data['rating'] ?? 0.0).toDouble(),
-      reviewCount: data['reviewCount'] ?? 0,
-      isSponsored: data['isSponsored'] ?? false,
-      isVerified: data['isVerified'] ?? false,
+      reviewCount: data['review_count'] ?? data['reviewCount'] ?? 0,
+      isSponsored: data['is_sponsored'] ?? data['isSponsored'] ?? false,
+      isVerified: data['is_verified'] ?? data['isVerified'] ?? false,
       address: data['address'] ?? '',
       phone: data['phone'] ?? '',
-      openingHours: data['openingHours'] ?? '9:00 AM - 5:00 PM',
-      priceRange: data['priceRange'] ?? '₹₹',
+      openingHours: data['opening_hours'] ?? data['openingHours'] ?? '9:00 AM - 5:00 PM',
+      priceRange: data['price_range'] ?? data['priceRange'] ?? '₹₹',
       description: data['description'] ?? 'A wonderful place in Hazaribagh.',
     );
   }

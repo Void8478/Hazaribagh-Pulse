@@ -1,8 +1,8 @@
 import '../../../../models/place_model.dart';
-import '../services/firestore_listing_service.dart';
+import '../services/supabase_listing_service.dart';
 
 class ListingRepository {
-  final FirestoreListingService _service;
+  final SupabaseListingService _service;
 
   ListingRepository(this._service);
 

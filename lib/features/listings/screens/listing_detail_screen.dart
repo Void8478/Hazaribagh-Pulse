@@ -9,6 +9,7 @@ import '../../listings/providers/listing_providers.dart';
 import '../../reviews/providers/review_providers.dart';
 import '../../auth/services/auth_provider.dart';
 import '../../bookmarks/providers/bookmark_providers.dart';
+import '../../profile/providers/profile_providers.dart';
 
 class ListingDetailScreen extends ConsumerWidget {
   final String listingId;

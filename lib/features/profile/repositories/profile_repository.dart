@@ -1,8 +1,8 @@
-import '../services/firestore_profile_service.dart';
+import '../services/supabase_profile_service.dart';
 import '../../../../models/review_model.dart';
 
 class ProfileRepository {
-  final FirestoreProfileService _service;
+  final SupabaseProfileService _service;
 
   ProfileRepository(this._service);
 

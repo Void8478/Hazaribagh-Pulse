@@ -1,8 +1,8 @@
 import '../../../../models/review_model.dart';
-import '../services/firestore_review_service.dart';
+import '../services/supabase_review_service.dart';
 
 class ReviewRepository {
-  final FirestoreReviewService _service;
+  final SupabaseReviewService _service;
 
   ReviewRepository(this._service);
 

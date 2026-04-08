@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import '../services/auth_provider.dart';
 import '../../../core/utils/phone_formatter.dart';
 
@@ -19,9 +19,9 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen> {
   @override
   void initState() {
     super.initState();
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null && user.displayName != null && user.displayName!.isNotEmpty) {
-      _fullNameController.text = user.displayName!;
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null && user.userMetadata != null && user.userMetadata!['full_name'] != null) {
+      _fullNameController.text = user.userMetadata!['full_name'];
     }
   }
 

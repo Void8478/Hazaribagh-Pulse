@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class UserModel {
   final String id;
   final String fullName; // Changed from 'name', but we can keep getters backwards compatible if needed
@@ -36,43 +34,37 @@ class UserModel {
     required this.savedEventIds,
   });
 
-  factory UserModel.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+  factory UserModel.fromJson(Map<String, dynamic> data) {
     return UserModel(
-      id: doc.id,
-      fullName: data['fullName'] ?? data['name'] ?? 'User',
+      id: data['id']?.toString() ?? '',
+      fullName: data['full_name'] ?? data['fullName'] ?? data['name'] ?? 'User',
       email: data['email'] ?? '',
-      phoneNumber: data['phoneNumber'] ?? '',
-      authProvider: data['authProvider'] ?? 'unknown',
-      createdAt: data['createdAt'] != null ? (data['createdAt'] as Timestamp).toDate() : null,
-      updatedAt: data['updatedAt'] != null ? (data['updatedAt'] as Timestamp).toDate() : null,
-      avatarUrl: data['avatarUrl'] ?? '',
-      trustLevel: data['trustLevel'] ?? 'Newcomer',
+      phoneNumber: data['phone_number'] ?? data['phoneNumber'] ?? '',
+      authProvider: data['auth_provider'] ?? data['authProvider'] ?? 'unknown',
+      createdAt: data['created_at'] != null ? DateTime.tryParse(data['created_at'].toString()) : null,
+      updatedAt: data['updated_at'] != null ? DateTime.tryParse(data['updated_at'].toString()) : null,
+      avatarUrl: data['avatar_url'] ?? data['avatarUrl'] ?? '',
+      trustLevel: data['trust_level'] ?? data['trustLevel'] ?? 'Newcomer',
       points: data['points'] ?? 0,
-      reviewsCount: data['reviewsCount'] ?? 0,
-      photosCount: data['photosCount'] ?? 0,
-      savedPlaceIds: List<String>.from(data['savedPlaceIds'] ?? []),
-      savedEventIds: List<String>.from(data['savedEventIds'] ?? []),
+      reviewsCount: data['reviews_count'] ?? data['reviewsCount'] ?? 0,
+      photosCount: data['photos_count'] ?? data['photosCount'] ?? 0,
+      savedPlaceIds: List<String>.from(data['saved_place_ids'] ?? data['savedPlaceIds'] ?? []),
+      savedEventIds: List<String>.from(data['saved_event_ids'] ?? data['savedEventIds'] ?? []),
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'fullName': fullName,
+      'full_name': fullName,
       'email': email,
-      'phoneNumber': phoneNumber,
-      'authProvider': authProvider,
-      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
-      'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : FieldValue.serverTimestamp(),
-      'avatarUrl': avatarUrl,
-      'trustLevel': trustLevel,
+      'phone_number': phoneNumber,
+      'avatar_url': avatarUrl,
+      'trust_level': trustLevel,
       'points': points,
-      'reviewsCount': reviewsCount,
-      'photosCount': photosCount,
-      'savedPlaceIds': savedPlaceIds,
-      'savedEventIds': savedEventIds,
-      // Optional mapping back to name for legacy querying
-      'name': fullName,
+      'reviews_count': reviewsCount,
+      'photos_count': photosCount,
+      'saved_place_ids': savedPlaceIds,
+      'saved_event_ids': savedEventIds,
     };
   }
 }

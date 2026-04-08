@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/place_model.dart';
-import '../services/firestore_listing_service.dart';
+import '../services/supabase_listing_service.dart';
 import '../repositories/listing_repository.dart';
 
-final listingServiceProvider = Provider<FirestoreListingService>((ref) {
-  return FirestoreListingService();
+final listingServiceProvider = Provider<SupabaseListingService>((ref) {
+  return SupabaseListingService();
 });
 
 final listingRepositoryProvider = Provider<ListingRepository>((ref) {

@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'firebase_options.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
 import 'core/routing/app_router.dart';
@@ -15,30 +12,13 @@ void main() async {
 
   try {
     debugPrint("🚀 Starting Hazaribagh Pulse Initialization...");
-    // Initialize Firebase pointing to the auto-generated options file
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    debugPrint("✅ Firebase Initialized cleanly.");
 
-    // Initialize App Check to use a Debug Provider locally safely on emulators
-    try {
-      if (kDebugMode) {
-        await FirebaseAppCheck.instance.activate(
-          providerAndroid: const AndroidDebugProvider(),
-          providerApple: const AppleDebugProvider(),
-        );
-        debugPrint("✅ AppCheck (Debug) Initialized.");
-      } else {
-        await FirebaseAppCheck.instance.activate(
-          providerAndroid: const AndroidPlayIntegrityProvider(),
-          providerApple: const AppleAppAttestProvider(),
-        );
-        debugPrint("✅ AppCheck (Prod Mode) Initialized.");
-      }
-    } catch (e) {
-      debugPrint("⚠️ AppCheck activation failed (Non-fatal): $e");
-    }
+    // Initialize Supabase (Replace YOUR_SUPABASE_URL and YOUR_SUPABASE_ANON_KEY)
+    await Supabase.initialize(
+      url: const String.fromEnvironment('SUPABASE_URL', defaultValue: 'https://beudtyljcymeeklihshg.supabase.co'),
+      anonKey: const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJldWR0eWxqY3ltZWVrbGloc2hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MjY3OTYsImV4cCI6MjA5MTIwMjc5Nn0.APkYQf3k3xacQY89PnAmgQIrSVyhPJSFCZ8ALZhby2E'),
+    );
+    debugPrint("✅ Supabase Initialized.");
 
     // Initialize SharedPreferences
     prefs = await SharedPreferences.getInstance();

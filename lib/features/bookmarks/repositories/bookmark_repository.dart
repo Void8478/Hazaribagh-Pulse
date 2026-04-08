@@ -1,7 +1,7 @@
-import '../services/firestore_bookmark_service.dart';
+import '../services/supabase_bookmark_service.dart';
 
 class BookmarkRepository {
-  final FirestoreBookmarkService _service;
+  final SupabaseBookmarkService _service;
 
   BookmarkRepository(this._service);
 

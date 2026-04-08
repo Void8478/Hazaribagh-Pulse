@@ -1,10 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../services/firestore_profile_service.dart';
-import '../repositories/profile_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../../models/user_model.dart';
 import '../../../../models/review_model.dart';
-
-final profileServiceProvider = Provider<FirestoreProfileService>((ref) {
-  return FirestoreProfileService();
+import '../../auth/services/auth_provider.dart';
+import '../services/supabase_profile_service.dart';
+import '../repositories/profile_repository.dart';
+final profileServiceProvider = Provider<SupabaseProfileService>((ref) {
+  return SupabaseProfileService();
 });
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
@@ -15,4 +17,23 @@ final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
 // Fetches the globally authenticated user's reviews dynamically
 final userReviewsProvider = FutureProvider.family<List<ReviewModel>, String>((ref, userId) async {
   return ref.watch(profileRepositoryProvider).getUserReviews(userId);
+});
+
+// Stream the current user's profile natively from Supabase
+final userProfileProvider = StreamProvider<UserModel?>((ref) {
+  final user = ref.watch(authStateChangesProvider).value;
+  if (user == null) {
+    return Stream.value(null);
+  }
+
+  return Supabase.instance.client
+      .from('profiles')
+      .stream(primaryKey: ['id'])
+      .eq('id', user.id)
+      .map((list) {
+    if (list.isNotEmpty) {
+      return UserModel.fromJson(list.first);
+    }
+    return null;
+  });
 });

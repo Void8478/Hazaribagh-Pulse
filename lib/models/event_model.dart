@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class EventModel {
   final String id;
   final String title;
@@ -29,27 +27,25 @@ class EventModel {
     required this.description,
   });
 
-  factory EventModel.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-    
+  factory EventModel.fromJson(Map<String, dynamic> data) {
     DateTime parsedDate;
-    if (data['date'] is Timestamp) {
-      parsedDate = (data['date'] as Timestamp).toDate();
+    if (data['date'] != null) {
+      parsedDate = DateTime.tryParse(data['date'].toString()) ?? DateTime.now();
     } else {
-      parsedDate = DateTime.now(); // Fallback
+      parsedDate = DateTime.now();
     }
 
     return EventModel(
-      id: doc.id,
+      id: data['id']?.toString() ?? '',
       title: data['title'] ?? 'Unknown Event',
       category: data['category'] ?? 'Uncategorized',
-      imageUrl: data['imageUrl'] ?? 'https://via.placeholder.com/800',
+      imageUrl: data['image_url'] ?? data['imageUrl'] ?? 'https://via.placeholder.com/800',
       organizer: data['organizer'] ?? 'Unknown Organizer',
       location: data['location'] ?? 'Location TBA',
       address: data['address'] ?? '',
       date: parsedDate,
       time: data['time'] ?? 'Time TBA',
-      isFree: data['isFree'] ?? false,
+      isFree: data['is_free'] ?? data['isFree'] ?? false,
       price: data['price'] ?? '',
       description: data['description'] ?? 'No description provided.',
     );

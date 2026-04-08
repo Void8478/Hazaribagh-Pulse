@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/review_model.dart';
-import '../services/firestore_review_service.dart';
+import '../services/supabase_review_service.dart';
 import '../repositories/review_repository.dart';
 
-final reviewServiceProvider = Provider<FirestoreReviewService>((ref) {
-  return FirestoreReviewService();
+final reviewServiceProvider = Provider<SupabaseReviewService>((ref) {
+  return SupabaseReviewService();
 });
 
 final reviewRepositoryProvider = Provider<ReviewRepository>((ref) {

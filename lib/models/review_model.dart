@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class ReviewModel {
   final String id;
   final String listingId;
@@ -33,47 +31,45 @@ class ReviewModel {
     this.imageUrls = const [],
   });
 
-  factory ReviewModel.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-    
+  factory ReviewModel.fromJson(Map<String, dynamic> data) {
     DateTime parsedTimestamp;
-    if (data['timestamp'] is Timestamp) {
-      parsedTimestamp = (data['timestamp'] as Timestamp).toDate();
+    if (data['timestamp'] != null) {
+      parsedTimestamp = DateTime.tryParse(data['timestamp'].toString()) ?? DateTime.now();
     } else {
-      parsedTimestamp = DateTime.now(); // Fallback
+      parsedTimestamp = DateTime.now();
     }
 
     return ReviewModel(
-      id: doc.id,
-      listingId: data['listingId'] ?? '',
-      authorId: data['authorId'] ?? '',
-      authorName: data['authorName'] ?? 'Anonymous',
-      authorImageUrl: data['authorImageUrl'] ?? '',
+      id: data['id']?.toString() ?? '',
+      listingId: data['listing_id']?.toString() ?? data['listingId']?.toString() ?? '',
+      authorId: data['author_id']?.toString() ?? data['authorId']?.toString() ?? '',
+      authorName: data['author_name'] ?? data['authorName'] ?? 'Anonymous',
+      authorImageUrl: data['author_image_url'] ?? data['authorImageUrl'] ?? '',
       rating: (data['rating'] ?? 0.0).toDouble(),
       text: data['text'] ?? '',
       timestamp: parsedTimestamp,
       pros: data['pros'] ?? '',
       cons: data['cons'] ?? '',
-      pricingTip: data['pricingTip'] ?? '',
-      bestTimeToVisit: data['bestTimeToVisit'] ?? '',
-      imageUrls: List<String>.from(data['imageUrls'] ?? []),
+      pricingTip: data['pricing_tip'] ?? data['pricingTip'] ?? '',
+      bestTimeToVisit: data['best_time_to_visit'] ?? data['bestTimeToVisit'] ?? '',
+      imageUrls: List<String>.from(data['image_urls'] ?? data['imageUrls'] ?? []),
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'listingId': listingId,
-      'authorId': authorId,
-      'authorName': authorName,
-      'authorImageUrl': authorImageUrl,
+      'listing_id': listingId,
+      'author_id': authorId,
+      'author_name': authorName,
+      'author_image_url': authorImageUrl,
       'rating': rating,
       'text': text,
-      'timestamp': Timestamp.fromDate(timestamp),
+      'timestamp': timestamp.toIso8601String(),
       'pros': pros,
       'cons': cons,
-      'pricingTip': pricingTip,
-      'bestTimeToVisit': bestTimeToVisit,
-      'imageUrls': imageUrls,
+      'pricing_tip': pricingTip,
+      'best_time_to_visit': bestTimeToVisit,
+      'image_urls': imageUrls,
     };
   }
 }

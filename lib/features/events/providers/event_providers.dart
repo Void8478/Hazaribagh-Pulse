@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/event_model.dart';
-import '../services/firestore_event_service.dart';
+import '../services/supabase_event_service.dart';
 import '../repositories/event_repository.dart';
 
-final eventServiceProvider = Provider<FirestoreEventService>((ref) {
-  return FirestoreEventService();
+final eventServiceProvider = Provider<SupabaseEventService>((ref) {
+  return SupabaseEventService();
 });
 
 final eventRepositoryProvider = Provider<EventRepository>((ref) {

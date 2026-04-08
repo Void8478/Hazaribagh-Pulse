@@ -18,6 +18,8 @@ class _EmailSignupScreenState extends ConsumerState<EmailSignupScreen> {
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _passwordVisible = false;
+  bool _confirmVisible = false;
 
   @override
   void dispose() {
@@ -30,29 +32,35 @@ class _EmailSignupScreenState extends ConsumerState<EmailSignupScreen> {
   }
 
   void _signup() {
-    if (_formKey.currentState!.validate()) {
-      if (_passwordController.text != _confirmController.text) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Passwords do not match'), backgroundColor: Colors.red),
-        );
-        return;
-      }
-      
-      final phone = _phoneController.text.trim();
-      if (phone.length < 15) { // '+91 98765 43210' is 15 chars
-         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter a valid 10-digit phone number'), backgroundColor: Colors.red),
-        );
-        return;
-      }
+    if (!_formKey.currentState!.validate()) return;
 
-      ref.read(authProvider.notifier).signUpWithEmail(
-        _fullNameController.text.trim(),
-        _emailController.text.trim(),
-        phone,
-        _passwordController.text.trim(),
+    if (_passwordController.text != _confirmController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Passwords do not match'),
+          backgroundColor: Colors.red,
+        ),
       );
+      return;
     }
+
+    final phone = _phoneController.text.trim();
+    if (phone.length < 15) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid 10-digit phone number'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    ref.read(authProvider.notifier).signUpWithEmail(
+          _fullNameController.text.trim(),
+          _emailController.text.trim(),
+          phone,
+          _passwordController.text.trim(),
+        );
   }
 
   @override
@@ -60,15 +68,22 @@ class _EmailSignupScreenState extends ConsumerState<EmailSignupScreen> {
     final authState = ref.watch(authProvider);
     final theme = Theme.of(context);
 
+    // Listen for errors and verification state changes
     ref.listen<AuthState>(authProvider, (previous, next) {
-      if (next.error != null && (previous == null || previous.error != next.error)) {
+      if (next.error != null &&
+          (previous == null || previous.error != next.error)) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(next.error!), backgroundColor: theme.colorScheme.error),
+          SnackBar(
+            content: Text(next.error!),
+            backgroundColor: theme.colorScheme.error,
+          ),
         );
         ref.read(authProvider.notifier).clearError();
       }
+      // Navigation to verification screen is driven by the router.
     });
 
+    // --- NORMAL SIGNUP FORM ---
     return Scaffold(
       appBar: AppBar(title: const Text('Create Account')),
       body: SafeArea(
@@ -81,14 +96,19 @@ class _EmailSignupScreenState extends ConsumerState<EmailSignupScreen> {
               children: [
                 Text(
                   'Join Pulse',
-                  style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Sign up with email to discover and review local places.',
-                  style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                  style:
+                      theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
                 ),
                 const SizedBox(height: 32),
+
+                // Full Name
                 TextFormField(
                   controller: _fullNameController,
                   decoration: const InputDecoration(
@@ -97,9 +117,14 @@ class _EmailSignupScreenState extends ConsumerState<EmailSignupScreen> {
                     border: OutlineInputBorder(),
                   ),
                   textCapitalization: TextCapitalization.words,
-                  validator: (value) => value == null || value.isEmpty ? 'Please enter your full name' : null,
+                  validator: (value) =>
+                      value == null || value.isEmpty
+                          ? 'Please enter your full name'
+                          : null,
                 ),
                 const SizedBox(height: 16),
+
+                // Email
                 TextFormField(
                   controller: _emailController,
                   decoration: const InputDecoration(
@@ -108,9 +133,14 @@ class _EmailSignupScreenState extends ConsumerState<EmailSignupScreen> {
                     border: OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.emailAddress,
-                  validator: (value) => value == null || value.isEmpty ? 'Please enter your email' : null,
+                  validator: (value) =>
+                      value == null || value.isEmpty
+                          ? 'Please enter your email'
+                          : null,
                 ),
                 const SizedBox(height: 16),
+
+                // Phone
                 TextFormField(
                   controller: _phoneController,
                   decoration: const InputDecoration(
@@ -122,7 +152,9 @@ class _EmailSignupScreenState extends ConsumerState<EmailSignupScreen> {
                   keyboardType: TextInputType.phone,
                   inputFormatters: [IndianPhoneNumberFormatter()],
                   validator: (value) {
-                    if (value == null || value.isEmpty || value == '+91 ') {
+                    if (value == null ||
+                        value.isEmpty ||
+                        value == '+91 ') {
                       return 'Please enter your phone number';
                     }
                     if (value.length < 15) {
@@ -132,41 +164,74 @@ class _EmailSignupScreenState extends ConsumerState<EmailSignupScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
+
+                // Password
                 TextFormField(
                   controller: _passwordController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Password',
-                    prefixIcon: Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(_passwordVisible
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined),
+                      onPressed: () =>
+                          setState(() => _passwordVisible = !_passwordVisible),
+                    ),
                   ),
-                  obscureText: true,
+                  obscureText: !_passwordVisible,
                   validator: (value) {
-                    if (value == null || value.isEmpty) return 'Please enter a password';
-                    if (value.length < 6) return 'Password must be at least 6 characters';
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter a password';
+                    }
+                    if (value.length < 6) {
+                      return 'Password must be at least 6 characters';
+                    }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
+
+                // Confirm Password
                 TextFormField(
                   controller: _confirmController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Confirm Password',
-                    prefixIcon: Icon(Icons.lock_reset),
-                    border: OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock_reset),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(_confirmVisible
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined),
+                      onPressed: () =>
+                          setState(() => _confirmVisible = !_confirmVisible),
+                    ),
                   ),
-                  obscureText: true,
-                  validator: (value) => value == null || value.isEmpty ? 'Please confirm your password' : null,
+                  obscureText: !_confirmVisible,
+                  validator: (value) =>
+                      value == null || value.isEmpty
+                          ? 'Please confirm your password'
+                          : null,
                 ),
                 const SizedBox(height: 32),
+
+                // Sign Up button
                 if (authState.isLoading)
                   const Center(child: CircularProgressIndicator())
                 else
                   FilledButton(
                     onPressed: _signup,
-                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                    child: const Text('Sign Up', style: TextStyle(fontSize: 16)),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: const Text('Create Account',
+                        style: TextStyle(fontSize: 16)),
                   ),
+
                 const SizedBox(height: 24),
+
+                // Already have account
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

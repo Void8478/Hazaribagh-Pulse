@@ -1,8 +1,8 @@
 import '../../../../models/event_model.dart';
-import '../services/firestore_event_service.dart';
+import '../services/supabase_event_service.dart';
 
 class EventRepository {
-  final FirestoreEventService _service;
+  final SupabaseEventService _service;
 
   EventRepository(this._service);
 
