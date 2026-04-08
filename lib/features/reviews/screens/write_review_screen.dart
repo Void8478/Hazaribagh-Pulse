@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
+import 'package:hazaribagh_pulse/models/review_model.dart';
 import '../widgets/star_rating_selector.dart';
 import '../providers/review_providers.dart';
-import '../../../../models/review_model.dart';
 import '../../auth/services/auth_provider.dart';
-
-import '../../profile/providers/profile_providers.dart';
+import '../../home/providers/home_providers.dart';
+import '../../listings/providers/listing_providers.dart';
 
 class WriteReviewScreen extends ConsumerStatefulWidget {
   final String listingId;
@@ -41,21 +40,18 @@ class _WriteReviewScreenState extends ConsumerState<WriteReviewScreen> {
       setState(() { _isSubmitting = true; });
 
       try {
-        final fbUser = ref.read(authStateChangesProvider).value;
-        if (fbUser == null) {
+        final currentUser = ref.read(authStateChangesProvider).value;
+        if (currentUser == null) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please log in to submit a review')));
           setState(() { _isSubmitting = false; });
           return;
         }
-        
-        final userProfile = ref.read(userProfileProvider).value;
 
         final newReview = ReviewModel(
-          id: const Uuid().v4(), // generate local ID if needed, though Firestore assigns Document ID automatically. We put one to satisfy strict model rules before cloud upload if needed.
+          id: '',
           listingId: widget.listingId,
-          authorId: fbUser.id,
-          authorName: userProfile?.name ?? 'Anonymous', 
-          authorImageUrl: userProfile?.avatarUrl ?? '',
+          userId: currentUser.id,
+          authorName: '',
           rating: _rating,
           text: _reviewText,
           timestamp: DateTime.now(),
@@ -70,6 +66,11 @@ class _WriteReviewScreenState extends ConsumerState<WriteReviewScreen> {
         
         // Force refresh the listing reviews so they appear instantly
         ref.invalidate(listingReviewsProvider(widget.listingId));
+        ref.invalidate(listingDetailProvider(widget.listingId));
+        ref.invalidate(allListingsProvider);
+        ref.invalidate(homeTrendingListingsProvider);
+        ref.invalidate(homeTopRatedListingsProvider);
+        ref.invalidate(homeHiddenGemListingsProvider);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -235,4 +236,3 @@ class _WriteReviewScreenState extends ConsumerState<WriteReviewScreen> {
     );
   }
 }
-

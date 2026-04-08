@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/place_model.dart';
+import '../../features/interactions/providers/interaction_providers.dart';
 
-class PlaceCard extends StatelessWidget {
+class PlaceCard extends ConsumerWidget {
   final PlaceModel place;
   final double width;
 
@@ -13,9 +15,14 @@ class PlaceCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+    final likesAsync = ref.watch(userLikesProvider);
+    final bookmarksAsync = ref.watch(userBookmarksProvider);
+
+    final isLiked = likesAsync.value?.contains(place.id) ?? false;
+    final isBookmarked = bookmarksAsync.value?.contains(place.id) ?? false;
+
     return GestureDetector(
       onTap: () {
         context.push('/listing/${place.id}');
@@ -50,6 +57,17 @@ class PlaceCard extends StatelessWidget {
                     height: 120,
                     width: width,
                     fit: BoxFit.cover,
+                    filterQuality: FilterQuality.low,
+                    cacheWidth: 420,
+                    gaplessPlayback: true,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 120,
+                        width: width,
+                        color: colorScheme.surfaceContainerHighest,
+                      );
+                    },
                     errorBuilder: (context, error, stackTrace) => Container(
                       height: 120,
                       width: width,
@@ -104,6 +122,66 @@ class PlaceCard extends StatelessWidget {
                       Text(
                         '${place.rating} (${place.reviewCount})',
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      Consumer(
+                        builder: (context, ref, child) {
+                          final likeCountAsync = ref.watch(itemLikeCountProvider('place:${place.id}'));
+                          final likeCount = likeCountAsync.value ?? 0;
+                          return Row(
+                            children: [
+                              IconButton(
+                                constraints: const BoxConstraints(),
+                                padding: const EdgeInsets.all(4),
+                                icon: Icon(
+                                  isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded, 
+                                  size: 18, 
+                                  color: isLiked ? Colors.red : colorScheme.onSurfaceVariant,
+                                ),
+                                onPressed: () async {
+                                  try {
+                                    await ref.read(userLikesProvider.notifier).toggleLike(place.id, 'place');
+                                  } catch (e) {
+                                    if (e.toString().contains('auth_required')) {
+                                      if (!context.mounted) return;
+                                      context.push('/login');
+                                    }
+                                  }
+                                },
+                              ),
+                              if (likeCount > 0)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 6.0),
+                                  child: Text(
+                                    '$likeCount',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                      IconButton(
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(4),
+                        icon: Icon(
+                          isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, 
+                          size: 18, 
+                          color: isBookmarked ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                        ),
+                        onPressed: () async {
+                          try {
+                            await ref.read(userBookmarksProvider.notifier).toggleBookmark(place.id, 'place');
+                          } catch (e) {
+                            if (e.toString().contains('auth_required')) {
+                              if (!context.mounted) return;
+                              context.push('/login');
+                            }
+                          }
+                        },
                       ),
                     ],
                   ),

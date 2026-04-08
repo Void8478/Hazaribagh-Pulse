@@ -27,7 +27,7 @@ void main() async {
   } catch (e, stack) {
     debugPrint("🛑 CRITICAL STARTUP ERROR: $e");
     debugPrint("Stacktrace: $stack");
-    // If Firebase completely fails to start, boot to a safe error screen to prevent blank disconnection
+    // If Supabase startup fails completely, boot to a safe error screen.
     runApp(StartupErrorApp(error: e.toString()));
     return;
   }
@@ -99,4 +99,3 @@ class HazaribaghPulseApp extends ConsumerWidget {
     );
   }
 }
-

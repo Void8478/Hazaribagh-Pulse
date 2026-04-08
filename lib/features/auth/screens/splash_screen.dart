@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/auth_provider.dart';
 
-/// Splash screen shown while Firebase auth + profile verification is resolving.
+/// Splash screen shown while Supabase auth + profile verification is resolving.
 /// Has a built-in safety timeout — if startup takes longer than 12 seconds,
 /// it displays a retry button so the user is never permanently stuck.
 class SplashScreen extends ConsumerStatefulWidget {
@@ -39,10 +39,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   Widget build(BuildContext context) {
     // Watch auth state so GoRouter redirect triggers rebuild when state changes
     final authState = ref.watch(authProvider);
-    final firebaseAuth = ref.watch(authStateChangesProvider);
+    final supabaseAuth = ref.watch(authStateChangesProvider);
     
     debugPrint('🎨 [SplashScreen] build — authState: $authState, '
-               'firebaseAuth isLoading: ${firebaseAuth.isLoading}');
+               'supabaseAuth isLoading: ${supabaseAuth.isLoading}');
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.primary,

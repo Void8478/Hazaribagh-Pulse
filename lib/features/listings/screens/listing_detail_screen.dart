@@ -7,9 +7,7 @@ import '../widgets/review_preview_card.dart';
 import '../widgets/info_chip.dart';
 import '../../listings/providers/listing_providers.dart';
 import '../../reviews/providers/review_providers.dart';
-import '../../auth/services/auth_provider.dart';
-import '../../bookmarks/providers/bookmark_providers.dart';
-import '../../profile/providers/profile_providers.dart';
+import '../../interactions/providers/interaction_providers.dart';
 
 class ListingDetailScreen extends ConsumerWidget {
   final String listingId;
@@ -57,35 +55,97 @@ class ListingDetailScreen extends ConsumerWidget {
                       return Image.network(
                         images[index],
                         fit: BoxFit.cover,
+                        filterQuality: FilterQuality.low,
+                        cacheWidth: 1200,
+                        gaplessPlayback: true,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return ColoredBox(
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            child: const Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) => ColoredBox(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          child: const Center(
+                            child: Icon(Icons.image_not_supported_outlined),
+                          ),
+                        ),
                       );
                     },
                   ),
                 ),
                 actions: [
-                  IconButton(
-                    icon: const Icon(Icons.share, color: Colors.white),
-                    onPressed: () {},
-                  ),
                   Consumer(
                     builder: (context, ref, child) {
-                      final hasAuth = ref.watch(authStateChangesProvider).value != null;
-                      final userProfileAsync = ref.watch(userProfileProvider);
-                      final isSaved = userProfileAsync.value?.savedPlaceIds.contains(listingId) ?? false;
-                      
-                      return IconButton(
-                        icon: Icon(isSaved ? Icons.bookmark : Icons.bookmark_border, color: Colors.white),
-                        onPressed: () {
-                          if (!hasAuth) {
-                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please log in to save places!')));
-                           return;
-                          }
-                          final user = userProfileAsync.value;
-                          if (user != null) {
-                            ref.read(bookmarkRepositoryProvider).toggleSavedPlace(user.id, listingId, !isSaved);
-                          }
-                        },
+                      final likeCountAsync = ref.watch(itemLikeCountProvider('place:$listingId'));
+                      final likeCount = likeCountAsync.value ?? 0;
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (likeCount > 0)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                              child: Text(
+                                '$likeCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+                                ),
+                              ),
+                            ),
+                          Consumer(builder: (context, ref, _) {
+                            final userLikes = ref.watch(userLikesProvider).value ?? {};
+                            final isLiked = userLikes.contains(listingId);
+                            return IconButton(
+                              icon: Icon(
+                                isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                color: isLiked ? Colors.red : Colors.white,
+                                shadows: isLiked ? [] : const [Shadow(color: Colors.black54, blurRadius: 4)],
+                              ),
+                              onPressed: () async {
+                                try {
+                                  await ref.read(userLikesProvider.notifier).toggleLike(listingId, 'place');
+                                } catch (e) {
+                                  if (e.toString().contains('auth_required')) {
+                                    if (!context.mounted) return;
+                                    context.push('/login');
+                                  }
+                                }
+                              },
+                            );
+                          }),
+                          Consumer(builder: (context, ref, _) {
+                            final userBookmarks = ref.watch(userBookmarksProvider).value ?? {};
+                            final isBookmarked = userBookmarks.contains(listingId);
+                            return IconButton(
+                              icon: Icon(
+                                isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                                color: isBookmarked ? Theme.of(context).primaryColor : Colors.white,
+                                shadows: isBookmarked ? [] : const [Shadow(color: Colors.black54, blurRadius: 4)],
+                              ),
+                              onPressed: () async {
+                                try {
+                                  await ref.read(userBookmarksProvider.notifier).toggleBookmark(listingId, 'place');
+                                } catch (e) {
+                                  if (e.toString().contains('auth_required')) {
+                                    if (!context.mounted) return;
+                                    context.push('/login');
+                                  }
+                                }
+                              },
+                            );
+                          }),
+                        ],
                       );
                     },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.share, color: Colors.white, shadows: [Shadow(color: Colors.black54, blurRadius: 4)]),
+                    onPressed: () {},
                   ),
                 ],
               ),
@@ -200,13 +260,23 @@ class ListingDetailScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 8),
                       
-                      // Live Firestore Review Preview
+                      // Live Supabase review preview
                       reviewsAsync.when(
                         data: (reviews) {
                           if (reviews.isEmpty) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 16.0),
-                              child: Text('No reviews yet. Be the first to review!'),
+                            return Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest
+                                    .withValues(alpha: 0.25),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Text(
+                                'No reviews yet. Be the first to review this place.',
+                              ),
                             );
                           }
                           return Column(
@@ -217,7 +287,28 @@ class ListingDetailScreen extends ConsumerWidget {
                           padding: EdgeInsets.all(16.0),
                           child: Center(child: CircularProgressIndicator()),
                         ),
-                        error: (error, stack) => Text('Error loading reviews: $error'),
+                        error: (error, stack) => Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .errorContainer
+                                .withValues(alpha: 0.45),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Error loading reviews: $error'),
+                              const SizedBox(height: 8),
+                              TextButton(
+                                onPressed: () => ref.refresh(listingReviewsProvider(listingId)),
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
 
                       // Write Review Button

@@ -59,6 +59,17 @@ class ExploreListingCard extends ConsumerWidget {
                     height: 140,
                     width: double.infinity,
                     fit: BoxFit.cover,
+                    filterQuality: FilterQuality.low,
+                    cacheWidth: 640,
+                    gaplessPlayback: true,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 140,
+                        width: double.infinity,
+                        color: colorScheme.surfaceContainerHighest,
+                      );
+                    },
                     errorBuilder: (context, error, stackTrace) => Container(
                       height: 140,
                       width: double.infinity,

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../models/category_model.dart';
 import '../../../../models/place_model.dart';
 import '../services/supabase_listing_service.dart';
 import '../repositories/listing_repository.dart';
@@ -15,6 +16,11 @@ final listingRepositoryProvider = Provider<ListingRepository>((ref) {
 final allListingsProvider = FutureProvider<List<PlaceModel>>((ref) async {
   final repository = ref.watch(listingRepositoryProvider);
   return repository.fetchAllListings();
+});
+
+final allCategoriesProvider = FutureProvider<List<CategoryModel>>((ref) async {
+  final repository = ref.watch(listingRepositoryProvider);
+  return repository.fetchAllCategories();
 });
 
 final listingDetailProvider = FutureProvider.family<PlaceModel, String>((ref, id) async {

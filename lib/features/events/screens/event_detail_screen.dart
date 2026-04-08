@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../comments/services/supabase_comment_service.dart';
+import '../../comments/widgets/comment_section.dart';
 import '../../listings/widgets/info_chip.dart';
 import '../providers/event_providers.dart';
+import '../../interactions/providers/interaction_providers.dart';
+import 'package:go_router/go_router.dart';
 
 class EventDetailScreen extends ConsumerWidget {
   final String eventId;
@@ -17,6 +21,15 @@ class EventDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final eventAsyncValue = ref.watch(eventDetailProvider(eventId));
+    final theme = Theme.of(context);
+    
+    final userLikes = ref.watch(userLikesProvider).value ?? {};
+    final userBookmarks = ref.watch(userBookmarksProvider).value ?? {};
+    final isLiked = userLikes.contains(eventId);
+    final isBookmarked = userBookmarks.contains(eventId);
+    
+    final likeCountAsync = ref.watch(itemLikeCountProvider('event:$eventId'));
+    final likeCount = likeCountAsync.value ?? 0;
 
     return Scaffold(
       body: eventAsyncValue.when(
@@ -48,12 +61,56 @@ class EventDetailScreen extends ConsumerWidget {
                   ),
                 ),
                 actions: [
+                  if (likeCount > 0)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 0),
+                        child: Text(
+                          '$likeCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+                          ),
+                        ),
+                      ),
+                    ),
                   IconButton(
-                    icon: const Icon(Icons.share, color: Colors.white),
-                    onPressed: () {},
+                    icon: Icon(
+                      isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                      color: isLiked ? Colors.red : Colors.white,
+                      shadows: isLiked ? [] : const [Shadow(color: Colors.black54, blurRadius: 4)],
+                    ),
+                    onPressed: () async {
+                      try {
+                        await ref.read(userLikesProvider.notifier).toggleLike(eventId, 'event');
+                      } catch (e) {
+                        if (e.toString().contains('auth_required')) {
+                          if (!context.mounted) return;
+                          context.push('/login');
+                        }
+                      }
+                    },
                   ),
                   IconButton(
-                    icon: const Icon(Icons.bookmark_border, color: Colors.white),
+                    icon: Icon(
+                      isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                      color: isBookmarked ? theme.primaryColor : Colors.white,
+                      shadows: isBookmarked ? [] : const [Shadow(color: Colors.black54, blurRadius: 4)],
+                    ),
+                    onPressed: () async {
+                      try {
+                        await ref.read(userBookmarksProvider.notifier).toggleBookmark(eventId, 'event');
+                      } catch (e) {
+                        if (e.toString().contains('auth_required')) {
+                          if (!context.mounted) return;
+                          context.push('/login');
+                        }
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.share, color: Colors.white, shadows: [Shadow(color: Colors.black54, blurRadius: 4)]),
                     onPressed: () {},
                   ),
                 ],
@@ -101,6 +158,16 @@ class EventDetailScreen extends ConsumerWidget {
                       Text(
                         event.description,
                         style: TextStyle(height: 1.5, color: Colors.grey.shade800, fontSize: 16),
+                      ),
+                      const SizedBox(height: 32),
+                      CommentSection(
+                        title: 'Discussion',
+                        target: CommentTarget(
+                          type: CommentTargetType.event,
+                          contentId: event.id,
+                        ),
+                        emptyTitle: 'No discussion yet',
+                        emptySubtitle: 'Ask a question or share what people should know before going.',
                       ),
                       const SizedBox(height: 40),
                     ],
@@ -177,4 +244,3 @@ class EventDetailScreen extends ConsumerWidget {
     );
   }
 }
-

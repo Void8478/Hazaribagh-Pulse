@@ -1,41 +1,69 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../../models/review_model.dart';
+import 'package:hazaribagh_pulse/models/review_model.dart';
 
 class SupabaseReviewService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
+  Object _normalizedId(String id) => int.tryParse(id) ?? id;
+
   Future<List<ReviewModel>> getReviewsByListingId(String listingId) async {
     try {
-      final List<dynamic> response = await _supabase
+      final response = await _supabase
           .from('reviews')
-          .select()
-          .eq('listing_id', listingId)
-          .order('timestamp', ascending: false);
-      return response.map((data) => ReviewModel.fromJson(data as Map<String, dynamic>)).toList();
+          .select('*, profiles(id, full_name, username, avatar_url)')
+          .eq('listing_id', _normalizedId(listingId))
+          .order('created_at', ascending: false);
+      return (response as List)
+          .map((data) => ReviewModel.fromJson(Map<String, dynamic>.from(data as Map)))
+          .toList();
     } catch (e) {
       throw Exception('Failed to fetch reviews: $e');
     }
   }
 
   Future<void> submitReview(ReviewModel review) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      throw Exception('auth_required');
+    }
+
     try {
-      // 1. Add the review to the reviews collection
-      await _supabase.from('reviews').insert(review.toMap());
-      
-      // 2. Increment the user's reviewsCount in profiles (Optional step if tracked in profiles)
-      // Note: Assuming Supabase trigger or RPC here. For now, doing a client-side fetch & update approach
-      // or RPC for simplicity if you want it reliable:
-      // await _supabase.rpc('increment_review_count', params: {'user_id': review.authorId});
-      
-      // Alternatively, we can just fetch and plus one:
-      final userResponse = await _supabase.from('profiles').select('reviews_count').eq('id', review.authorId).maybeSingle();
-      if (userResponse != null) {
-        final currentCount = userResponse['reviews_count'] ?? 0;
-        await _supabase.from('profiles').update({'reviews_count': currentCount + 1}).eq('id', review.authorId);
-      }
-      
+      final payload = review.toMap()
+        ..['listing_id'] = _normalizedId(review.listingId)
+        ..['user_id'] = user.id
+        ..remove('author_id')
+        ..remove('author_name')
+        ..remove('author_image_url')
+        ..remove('timestamp');
+
+      await _supabase.from('reviews').insert(payload);
+      await _refreshListingStats(review.listingId);
     } catch (e) {
       throw Exception('Failed to submit review: $e');
     }
+  }
+
+  Future<void> _refreshListingStats(String listingId) async {
+    final listingIdValue = _normalizedId(listingId);
+    final response = await _supabase
+        .from('reviews')
+        .select('rating')
+        .eq('listing_id', listingIdValue);
+
+    final reviews = (response as List)
+        .map((item) => (item as Map<String, dynamic>)['rating'])
+        .where((rating) => rating != null)
+        .map((rating) => (rating as num).toDouble())
+        .toList();
+
+    final reviewCount = reviews.length;
+    final averageRating = reviewCount == 0
+        ? 0.0
+        : reviews.reduce((value, element) => value + element) / reviewCount;
+
+    await _supabase.from('listings').update({
+      'rating': double.parse(averageRating.toStringAsFixed(1)),
+      'review_count': reviewCount,
+    }).eq('id', listingIdValue);
   }
 }

@@ -26,7 +26,7 @@ final savedPlacesProvider = FutureProvider<List<PlaceModel>>((ref) async {
   final chunk = userProfile.savedPlaceIds.take(10).toList();
   
   final response = await Supabase.instance.client
-      .from('places')
+      .from('listings')
       .select()
       .filter('id', 'in', chunk);
       

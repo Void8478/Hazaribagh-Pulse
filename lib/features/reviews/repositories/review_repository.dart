@@ -1,4 +1,4 @@
-import '../../../../models/review_model.dart';
+import 'package:hazaribagh_pulse/models/review_model.dart';
 import '../services/supabase_review_service.dart';
 
 class ReviewRepository {

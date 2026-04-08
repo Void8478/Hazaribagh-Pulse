@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../../models/user_model.dart';
-import '../../../../models/review_model.dart';
+import 'package:hazaribagh_pulse/models/review_model.dart';
+import 'package:hazaribagh_pulse/models/user_model.dart';
 import '../../auth/services/auth_provider.dart';
 import '../services/supabase_profile_service.dart';
 import '../repositories/profile_repository.dart';
@@ -26,14 +26,20 @@ final userProfileProvider = StreamProvider<UserModel?>((ref) {
     return Stream.value(null);
   }
 
+  final service = ref.watch(profileServiceProvider);
+
   return Supabase.instance.client
       .from('profiles')
       .stream(primaryKey: ['id'])
       .eq('id', user.id)
-      .map((list) {
-    if (list.isNotEmpty) {
-      return UserModel.fromJson(list.first);
-    }
-    return null;
-  });
+      .asyncMap((list) async {
+        if (list.isNotEmpty) {
+          return UserModel.fromProfile(
+            Map<String, dynamic>.from(list.first),
+            email: user.email ?? '',
+          );
+        }
+
+        return service.ensureProfileForCurrentUser();
+      });
 });

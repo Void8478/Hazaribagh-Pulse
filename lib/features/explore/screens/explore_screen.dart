@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/utils/mock_data.dart';
 import '../../../core/widgets/animated_list_item.dart';
 import '../../../core/widgets/premium_empty_state.dart';
+import '../../../core/widgets/create_bottom_sheet.dart';
 import '../providers/explore_providers.dart';
 import '../widgets/explore_search_bar.dart';
 import '../widgets/category_card.dart';
 import '../widgets/explore_listing_card.dart';
 import '../widgets/filter_sort_sheet.dart';
+import '../../listings/providers/listing_providers.dart';
 
 class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
@@ -39,6 +40,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final selectedCategory = ref.watch(exploreCategoryProvider);
     final filteredListingsAsync = ref.watch(filteredListingsProvider);
+    final categoriesAsync = ref.watch(allCategoriesProvider);
     final sortMode = ref.watch(exploreSortProvider);
 
     return Scaffold(
@@ -54,15 +56,26 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Title
-                    Text(
-                      'Explore',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        color: colorScheme.onSurface,
-                        letterSpacing: -1.0,
-                        height: 1.1,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Explore',
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w900,
+                            color: colorScheme.onSurface,
+                            letterSpacing: -1.0,
+                            height: 1.1,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline_rounded, size: 28),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => showCreateSheet(context),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -90,41 +103,71 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             ),
 
             // Category Chips
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 48, // slightly taller for new chips
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
+            categoriesAsync.when(
+              loading: () => const SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 48,
+                  child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                ),
+              ),
+              error: (err, _) => SliverToBoxAdapter(
+                child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  children: [
-                    // "All" chip
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: CategoryChip(
-                        label: 'All',
-                        icon: Icons.grid_view_rounded,
-                        isSelected: selectedCategory == null,
-                        onTap: () {
-                          ref.read(exploreCategoryProvider.notifier).set(null);
-                        },
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Could not load categories',
+                          style: TextStyle(
+                            color: colorScheme.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
+                        ),
                       ),
-                    ),
-                    ...MockData.categories.map((cat) {
-                      return Padding(
+                      TextButton(
+                        onPressed: () => ref.invalidate(allCategoriesProvider),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              data: (categories) => SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 48,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    children: [
+                      Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: CategoryChip(
-                          label: cat['name'],
-                          icon: cat['icon'],
-                          isSelected: selectedCategory == cat['name'],
+                          label: 'All',
+                          icon: Icons.grid_view_rounded,
+                          isSelected: selectedCategory == null,
                           onTap: () {
-                            final current = ref.read(exploreCategoryProvider);
-                            ref.read(exploreCategoryProvider.notifier).set(
-                                current == cat['name'] ? null : cat['name']);
+                            ref.read(exploreCategoryProvider.notifier).set(null);
                           },
                         ),
-                      );
-                    }),
-                  ],
+                      ),
+                      ...categories.map((category) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: CategoryChip(
+                            label: category.name,
+                            icon: category.icon,
+                            isSelected: selectedCategory == category.name,
+                            onTap: () {
+                              final current = ref.read(exploreCategoryProvider);
+                              ref.read(exploreCategoryProvider.notifier).set(
+                                    current == category.name ? null : category.name,
+                                  );
+                            },
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
                 ),
               ),
             ),

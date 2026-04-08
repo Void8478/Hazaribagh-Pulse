@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../models/review_model.dart';
+import 'package:hazaribagh_pulse/models/review_model.dart';
 import '../services/supabase_review_service.dart';
 import '../repositories/review_repository.dart';
 

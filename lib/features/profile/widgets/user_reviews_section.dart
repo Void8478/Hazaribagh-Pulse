@@ -32,7 +32,6 @@ class UserReviewsSection extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: () {
-                  // TODO: Navigate to full reviews list when route exists
                 },
                 style: TextButton.styleFrom(
                   foregroundColor: colorScheme.primary,

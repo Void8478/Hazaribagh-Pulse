@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/widgets/place_card.dart';
 import '../../events/widgets/event_card.dart';
 import '../widgets/user_header.dart';
@@ -74,6 +75,14 @@ class ProfileScreen extends ConsumerWidget {
             );
           }
 
+          final userReviewsAsync = ref.watch(userReviewsProvider(user.id));
+          final reviewsCount = userReviewsAsync.value?.length ?? user.reviewsCount;
+          final photosCount =
+              userReviewsAsync.value
+                  ?.fold<int>(0, (sum, review) => sum + review.imageUrls.length) ??
+              user.photosCount;
+          final savedCount = savedPlacesAsync.value?.length ?? user.savedPlaceIds.length;
+
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
@@ -91,7 +100,7 @@ class ProfileScreen extends ConsumerWidget {
                   IconButton(
                     icon: Icon(Icons.settings_outlined, color: colorScheme.onSurfaceVariant),
                     onPressed: () {
-                      // Scroll to settings section
+                      _showSettingsSheet(context);
                     },
                   ),
                 ],
@@ -100,7 +109,12 @@ class ProfileScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    UserHeader(user: user),
+                    UserHeader(
+                      user: user,
+                      reviewsCountOverride: reviewsCount,
+                      savedCountOverride: savedCount,
+                      photosCountOverride: photosCount,
+                    ),
                     const SizedBox(height: 28),
                     
                     // Saved Places — Firestore
@@ -193,6 +207,45 @@ class ProfileScreen extends ConsumerWidget {
     if (shouldLogout == true && context.mounted) {
       await ref.read(authProvider.notifier).signOut();
     }
+  }
+
+  Future<void> _showSettingsSheet(BuildContext context) async {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: colorScheme.surface,
+      builder: (sheetContext) {
+        Widget tile(IconData icon, String title, String route) {
+          return ListTile(
+            leading: Icon(icon, color: colorScheme.primary),
+            title: Text(title),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(sheetContext).pop();
+              context.push(route);
+            },
+          );
+        }
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                tile(Icons.person_outline, 'Edit Profile', '/edit-profile'),
+                tile(Icons.notifications_none, 'Notifications', '/notifications'),
+                tile(Icons.security, 'Privacy Settings', '/privacy'),
+                tile(Icons.help_outline, 'Help Center', '/help'),
+                tile(Icons.feedback_outlined, 'Send Feedback', '/feedback'),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _showDeleteDialog(BuildContext context, WidgetRef ref) async {

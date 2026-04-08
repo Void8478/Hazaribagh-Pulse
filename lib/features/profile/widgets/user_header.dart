@@ -4,13 +4,50 @@ import '../../../../models/user_model.dart';
 
 class UserHeader extends StatelessWidget {
   final UserModel user;
+  final int? reviewsCountOverride;
+  final int? savedCountOverride;
+  final int? photosCountOverride;
 
-  const UserHeader({super.key, required this.user});
+  const UserHeader({
+    super.key,
+    required this.user,
+    this.reviewsCountOverride,
+    this.savedCountOverride,
+    this.photosCountOverride,
+  });
+
+  String _avatarUrlWithVersion() {
+    if (user.avatarUrl.isEmpty) return user.avatarUrl;
+
+    final uri = Uri.tryParse(user.avatarUrl);
+    if (uri == null) return user.avatarUrl;
+
+    final version = user.updatedAt?.millisecondsSinceEpoch.toString();
+    if (version == null || version.isEmpty) return user.avatarUrl;
+
+    return uri.replace(
+      queryParameters: {
+        ...uri.queryParameters,
+        'v': version,
+      },
+    ).toString();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final avatarUrl = _avatarUrlWithVersion();
+    final reviewsCount = reviewsCountOverride ?? user.reviewsCount;
+    final savedCount = savedCountOverride ?? user.savedPlaceIds.length;
+    final photosCount = photosCountOverride ?? user.photosCount;
+    final usernameLabel = user.username.isNotEmpty ? '@${user.username}' : '';
+    final secondaryText = user.location.isNotEmpty
+        ? user.location
+        : usernameLabel;
+    final joinedLabel = user.createdAt != null
+        ? user.createdAt!.year.toString()
+        : '--';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
@@ -55,9 +92,16 @@ class UserHeader extends StatelessWidget {
                   ],
                 ),
                 child: CircleAvatar(
+                  key: ValueKey('${user.avatarUrl}-${user.updatedAt?.millisecondsSinceEpoch ?? 0}'),
                   radius: 42,
                   backgroundColor: colorScheme.surfaceContainerHighest,
-                  backgroundImage: user.avatarUrl.isNotEmpty ? NetworkImage(user.avatarUrl) : null,
+                  backgroundImage: avatarUrl.isNotEmpty
+                      ? ResizeImage.resizeIfNeeded(
+                          240,
+                          240,
+                          NetworkImage(avatarUrl),
+                        )
+                      : null,
                   child: user.avatarUrl.isEmpty
                       ? Icon(Icons.person, size: 42, color: colorScheme.onSurfaceVariant)
                       : null,
@@ -87,10 +131,10 @@ class UserHeader extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (user.phoneNumber.isNotEmpty) ...[
+                    if (secondaryText.isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(
-                        user.phoneNumber,
+                        secondaryText,
                         style: TextStyle(
                           fontSize: 13,
                           color: colorScheme.onSurfaceVariant,
@@ -98,41 +142,25 @@ class UserHeader extends StatelessWidget {
                       ),
                     ],
                     const SizedBox(height: 10),
-                    // Trust Badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            colorScheme.primary,
-                            colorScheme.primary.withValues(alpha: 0.8),
-                          ],
+                    if (usernameLabel.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: colorScheme.primary.withValues(alpha: 0.18),
+                          ),
                         ),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: colorScheme.primary.withValues(alpha: 0.3),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
+                        child: Text(
+                          usernameLabel,
+                          style: TextStyle(
+                            color: colorScheme.primary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
                           ),
-                        ],
+                        ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.shield_outlined, size: 14, color: colorScheme.onPrimary),
-                          const SizedBox(width: 4),
-                          Text(
-                            user.trustLevel,
-                            style: TextStyle(
-                              color: colorScheme.onPrimary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -164,13 +192,13 @@ class UserHeader extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _buildStatCol(context, user.reviewsCount.toString(), 'Reviews'),
+                _buildStatCol(context, reviewsCount.toString(), 'Reviews'),
                 _buildDivider(context),
-                _buildStatCol(context, user.savedPlaceIds.length.toString(), 'Saved'),
+                _buildStatCol(context, savedCount.toString(), 'Saved'),
                 _buildDivider(context),
-                _buildStatCol(context, user.photosCount.toString(), 'Photos'),
+                _buildStatCol(context, photosCount.toString(), 'Photos'),
                 _buildDivider(context),
-                _buildStatCol(context, user.points.toString(), 'Points'),
+                _buildStatCol(context, joinedLabel, 'Joined'),
               ],
             ),
           ),

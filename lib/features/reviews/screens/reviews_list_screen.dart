@@ -44,7 +44,26 @@ class ReviewsListScreen extends ConsumerWidget {
         ),
         data: (reviews) {
           if (reviews.isEmpty) {
-            return const Center(child: Text('No reviews yet. Be the first!'));
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.rate_review_outlined,
+                      size: 52,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'No reviews yet. Be the first to share your experience.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            );
           }
           return ListView.builder(
             padding: const EdgeInsets.only(top: 16.0, right: 16.0, left: 16.0, bottom: 32.0),
@@ -58,4 +77,3 @@ class ReviewsListScreen extends ConsumerWidget {
     );
   }
 }
-

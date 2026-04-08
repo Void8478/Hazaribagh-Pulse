@@ -6,8 +6,8 @@ class EventRepository {
 
   EventRepository(this._service);
 
-  Future<List<EventModel>> fetchUpcomingEvents() {
-    return _service.getUpcomingEvents();
+  Future<List<EventModel>> fetchUpcomingEvents({int? limit}) {
+    return _service.getUpcomingEvents(limit: limit);
   }
 
   Future<EventModel> fetchEventById(String id) {

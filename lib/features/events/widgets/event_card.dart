@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/event_model.dart';
+import '../../interactions/providers/interaction_providers.dart';
 
-class EventCard extends StatelessWidget {
+class EventCard extends ConsumerWidget {
   final EventModel event;
 
   const EventCard({
@@ -16,9 +18,14 @@ class EventCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final likesAsync = ref.watch(userLikesProvider);
+    final bookmarksAsync = ref.watch(userBookmarksProvider);
+
+    final isLiked = likesAsync.value?.contains(event.id) ?? false;
+    final isBookmarked = bookmarksAsync.value?.contains(event.id) ?? false;
 
     return GestureDetector(
       onTap: () {
@@ -53,6 +60,17 @@ class EventCard extends StatelessWidget {
                     height: 180,
                     width: double.infinity,
                     fit: BoxFit.cover,
+                    filterQuality: FilterQuality.low,
+                    cacheWidth: 720,
+                    gaplessPlayback: true,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 180,
+                        width: double.infinity,
+                        color: colorScheme.surfaceContainerHighest,
+                      );
+                    },
                     errorBuilder: (context, error, stackTrace) => Container(
                       height: 180,
                       width: double.infinity,
@@ -163,18 +181,65 @@ class EventCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      IconButton(
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        icon: Icon(Icons.bookmark_border, size: 24, color: colorScheme.onSurfaceVariant),
-                        onPressed: () {},
+                      Consumer(
+                        builder: (context, ref, child) {
+                          final likeCountAsync = ref.watch(itemLikeCountProvider('event:${event.id}'));
+                          final likeCount = likeCountAsync.value ?? 0;
+                          return Row(
+                            children: [
+                              IconButton(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                icon: Icon(
+                                  isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded, 
+                                  size: 24, 
+                                  color: isLiked ? Colors.red : colorScheme.onSurfaceVariant,
+                                ),
+                                onPressed: () async {
+                                  try {
+                                    await ref.read(userLikesProvider.notifier).toggleLike(event.id, 'event');
+                                  } catch (e) {
+                                    if (e.toString().contains('auth_required')) {
+                                      if (!context.mounted) return;
+                                      context.push('/login');
+                                    }
+                                  }
+                                },
+                              ),
+                              if (likeCount > 0)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 4.0),
+                                  child: Text(
+                                    '$likeCount',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 12),
                       IconButton(
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
-                        icon: Icon(Icons.share, size: 24, color: colorScheme.onSurfaceVariant),
-                        onPressed: () {},
+                        icon: Icon(
+                          isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, 
+                          size: 24, 
+                          color: isBookmarked ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                        ),
+                        onPressed: () async {
+                          try {
+                            await ref.read(userBookmarksProvider.notifier).toggleBookmark(event.id, 'event');
+                          } catch (e) {
+                            if (e.toString().contains('auth_required')) {
+                              if (!context.mounted) return;
+                              context.push('/login');
+                            }
+                          }
+                        },
                       ),
                     ],
                   ),

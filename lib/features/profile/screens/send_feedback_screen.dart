@@ -31,7 +31,7 @@ class _SendFeedbackScreenState extends State<SendFeedbackScreen> {
 
     setState(() => _isSending = true);
 
-    // Simulate sending (replace with Firestore write in production)
+    // Simulate sending (replace with a Supabase write in production)
     await Future.delayed(const Duration(seconds: 1));
 
     if (mounted) {

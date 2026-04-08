@@ -1,5 +1,6 @@
+import 'package:hazaribagh_pulse/models/review_model.dart';
+
 import '../services/supabase_profile_service.dart';
-import '../../../../models/review_model.dart';
 
 class ProfileRepository {
   final SupabaseProfileService _service;
