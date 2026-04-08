@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -41,6 +42,12 @@ class AuthState {
       needsProfileCompletion: needsProfileCompletion ?? this.needsProfileCompletion,
     );
   }
+
+  @override
+  String toString() {
+    return 'AuthState(isLoading: $isLoading, isInitializing: $isInitializing, '
+           'error: $error, needsProfileCompletion: $needsProfileCompletion)';
+  }
 }
 
 class AuthNotifier extends Notifier<AuthState> {
@@ -52,41 +59,89 @@ class AuthNotifier extends Notifier<AuthState> {
     _auth = ref.watch(firebaseAuthProvider);
     _googleSignIn = GoogleSignIn();
     
-    // We want to trigger an async verification task but return synchronous state immediately
-    _verifyUserProfileOnStartup();
+    debugPrint('🔄 [AuthNotifier] build() called — starting initialization');
+    
+    // Listen to auth state changes and trigger profile verification
+    // This replaces the old synchronous currentUser check which caused the race condition
+    _initializeWithAuthStream();
 
     return AuthState(isInitializing: true);
   }
 
-  Future<void> _verifyUserProfileOnStartup() async {
+  /// Waits for the FIRST auth state emission from Firebase, then verifies the profile.
+  /// This fixes the race condition where currentUser was null before Firebase restored the session.
+  Future<void> _initializeWithAuthStream() async {
     try {
-      final user = _auth.currentUser;
+      debugPrint('🔄 [AuthNotifier] Waiting for first auth state emission...');
       
-      // If no valid auth session initially, release lock
+      // Wait for the first auth state event with a timeout
+      // This ensures we don't wait forever if Firebase auth stream is delayed
+      final user = await _auth.authStateChanges().first.timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          debugPrint('⚠️ [AuthNotifier] Auth stream timed out after 8s — treating as unauthenticated');
+          return null;
+        },
+      );
+      
+      debugPrint('🔄 [AuthNotifier] Auth state received — user: ${user?.uid ?? 'null'}');
+      
       if (user == null) {
+        // No user session — release the lock, router will redirect to onboarding
+        debugPrint('✅ [AuthNotifier] No user session — initialization complete');
         state = state.copyWith(isInitializing: false);
         return;
       }
 
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      // User exists — verify their Firestore profile with a timeout
+      await _verifyUserProfile(user);
+    } catch (e) {
+      debugPrint('⚠️ [AuthNotifier] Initialization error (non-fatal): $e');
+      // Always release the lock on error — never leave the app stuck
+      state = state.copyWith(isInitializing: false);
+    }
+  }
+
+  /// Checks if the user has a complete Firestore profile document.
+  /// Has a timeout so slow network never blocks startup forever.
+  Future<void> _verifyUserProfile(User user) async {
+    try {
+      debugPrint('🔄 [AuthNotifier] Fetching profile for user: ${user.uid}');
+      
+      // Timeout the Firestore fetch — if network is slow, don't hang forever
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get()
+          .timeout(
+            const Duration(seconds: 6),
+            onTimeout: () {
+              debugPrint('⚠️ [AuthNotifier] Firestore profile fetch timed out after 6s');
+              throw TimeoutException('Profile fetch timed out');
+            },
+          );
+
       if (!doc.exists) {
+        debugPrint('📋 [AuthNotifier] Profile doc missing — needs profile completion');
         state = state.copyWith(isInitializing: false, needsProfileCompletion: true);
         return;
       }
 
       final data = doc.data()!;
       if (data['phoneNumber'] == null || data['phoneNumber'].toString().trim().isEmpty) {
+        debugPrint('📋 [AuthNotifier] Phone number missing — needs profile completion');
         state = state.copyWith(isInitializing: false, needsProfileCompletion: true);
         return;
       }
 
-      // If document looks clean, we mark safe
+      // Profile is complete
+      debugPrint('✅ [AuthNotifier] Profile verified — initialization complete');
       state = state.copyWith(isInitializing: false, needsProfileCompletion: false);
     } catch (e) {
-      debugPrint('Startup profile verification failed securely: $e');
-      // If offline/fails, we let the user through into normal flows to avoid bricking startup.
-      // Profile screen handles missing users natively too.
-      state = state.copyWith(isInitializing: false);
+      debugPrint('⚠️ [AuthNotifier] Profile verification failed (non-fatal): $e');
+      // On any error (timeout, network, permission), release the lock
+      // Let the user through — profile screen handles missing data gracefully
+      state = state.copyWith(isInitializing: false, needsProfileCompletion: false);
     }
   }
 
@@ -134,7 +189,7 @@ class AuthNotifier extends Notifier<AuthState> {
 
       state = state.copyWith(isLoading: false, needsProfileCompletion: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Google Sign-In failed: \${e.toString()}');
+      state = state.copyWith(isLoading: false, error: 'Google Sign-In failed: ${e.toString()}');
     }
   }
 
@@ -179,7 +234,7 @@ class AuthNotifier extends Notifier<AuthState> {
       
       state = state.copyWith(isLoading: false, needsProfileCompletion: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Failed to complete profile: \${e.toString()}');
+      state = state.copyWith(isLoading: false, error: 'Failed to complete profile: ${e.toString()}');
     }
   }
 

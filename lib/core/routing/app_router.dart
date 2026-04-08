@@ -22,6 +22,11 @@ import '../../features/events/screens/events_screen.dart';
 import '../../features/events/screens/event_detail_screen.dart';
 import '../../features/rankings/screens/rankings_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
+import '../../features/profile/screens/edit_profile_screen.dart';
+import '../../features/profile/screens/notifications_screen.dart';
+import '../../features/profile/screens/privacy_settings_screen.dart';
+import '../../features/profile/screens/help_center_screen.dart';
+import '../../features/profile/screens/send_feedback_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -30,43 +35,61 @@ final routerProvider = Provider<GoRouter>((ref) {
   final firebaseAuthUser = ref.watch(authStateChangesProvider);
   final authNotifierState = ref.watch(authProvider);
 
+  debugPrint('🧭 [Router] Provider rebuild — authNotifier: $authNotifierState, '
+             'firebaseAuth isLoading: ${firebaseAuthUser.isLoading}, '
+             'firebaseAuth hasValue: ${firebaseAuthUser.hasValue}, '
+             'firebaseAuth value: ${firebaseAuthUser.hasValue ? (firebaseAuthUser.value?.uid ?? 'null') : 'not-yet'}');
+
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
     redirect: (context, state) {
-      // If we are still initializing the auth notifier asynchronously, lock to splash
+      final currentPath = state.matchedLocation;
+      
+      // GATE 1: AuthNotifier is still initializing
       if (authNotifierState.isInitializing) {
-        return state.matchedLocation == '/splash' ? null : '/splash';
+        debugPrint('🧭 [Router] redirect: GATE 1 — AuthNotifier initializing, staying on splash');
+        return currentPath == '/splash' ? null : '/splash';
       }
 
-      // If Firebase Auth stream is still loading, wait on splash
+      // GATE 2: Firebase Auth stream has not emitted yet
       if (firebaseAuthUser.isLoading) {
-        return state.matchedLocation == '/splash' ? null : '/splash';
+        debugPrint('🧭 [Router] redirect: GATE 2 — Firebase auth stream loading, staying on splash');
+        return currentPath == '/splash' ? null : '/splash';
       }
 
-      final bool isAuth = firebaseAuthUser.value != null;
+      final bool isAuth = firebaseAuthUser.hasValue && firebaseAuthUser.value != null;
       final bool needsProfile = authNotifierState.needsProfileCompletion;
       
-      final isAuthFlow = state.matchedLocation.startsWith('/login') || 
-                         state.matchedLocation == '/onboarding' ||
-                         state.matchedLocation.startsWith('/email-') ||
-                         state.matchedLocation == '/forgot-password';
+      final isAuthFlow = currentPath.startsWith('/login') || 
+                         currentPath == '/onboarding' ||
+                         currentPath.startsWith('/email-') ||
+                         currentPath == '/forgot-password';
+
+      debugPrint('🧭 [Router] redirect: isAuth=$isAuth, needsProfile=$needsProfile, '
+                 'currentPath=$currentPath, isAuthFlow=$isAuthFlow');
 
       if (isAuth) {
-        // If logged in but profile is incomplete, force to /complete-profile
         if (needsProfile) {
-          if (state.matchedLocation != '/complete-profile') return '/complete-profile';
+          if (currentPath != '/complete-profile') {
+            debugPrint('🧭 [Router] → Redirecting to /complete-profile (needs profile)');
+            return '/complete-profile';
+          }
           return null;
         }
 
-        // If logged in completely, prevent visiting auth flows, splash, or complete-profile
-        if (!needsProfile && (isAuthFlow || state.matchedLocation == '/splash' || state.matchedLocation == '/complete-profile')) {
+        if (isAuthFlow || currentPath == '/splash' || currentPath == '/complete-profile') {
+          debugPrint('🧭 [Router] → Redirecting authenticated user to / (home)');
           return '/';
         }
       } else {
-        // If not authenticated, ensure they can only visit auth flows
-        if (!isAuthFlow) return '/onboarding'; 
+        if (!isAuthFlow) {
+          debugPrint('🧭 [Router] → Redirecting unauthenticated user to /onboarding');
+          return '/onboarding'; 
+        }
       }
+      
+      debugPrint('🧭 [Router] → No redirect needed, staying on $currentPath');
       return null;
     },
     routes: [
@@ -97,6 +120,27 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/complete-profile',
         builder: (context, state) => const CompleteProfileScreen(),
+      ),
+      // Profile sub-screens (top-level for back navigation)
+      GoRoute(
+        path: '/edit-profile',
+        builder: (context, state) => const EditProfileScreen(),
+      ),
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/privacy',
+        builder: (context, state) => const PrivacySettingsScreen(),
+      ),
+      GoRoute(
+        path: '/help',
+        builder: (context, state) => const HelpCenterScreen(),
+      ),
+      GoRoute(
+        path: '/feedback',
+        builder: (context, state) => const SendFeedbackScreen(),
       ),
       GoRoute(
         path: '/listing/:id',

@@ -3,7 +3,6 @@ import '../services/firestore_profile_service.dart';
 import '../repositories/profile_repository.dart';
 import '../../../../models/review_model.dart';
 
-
 final profileServiceProvider = Provider<FirestoreProfileService>((ref) {
   return FirestoreProfileService();
 });

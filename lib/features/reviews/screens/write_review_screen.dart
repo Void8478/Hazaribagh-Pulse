@@ -4,7 +4,6 @@ import 'package:uuid/uuid.dart';
 import '../widgets/star_rating_selector.dart';
 import '../providers/review_providers.dart';
 import '../../../../models/review_model.dart';
-import '../../../../core/utils/mock_data.dart';
 import '../../auth/services/auth_provider.dart';
 import '../../bookmarks/providers/bookmark_providers.dart';
 

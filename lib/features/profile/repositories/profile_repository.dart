@@ -9,4 +9,12 @@ class ProfileRepository {
   Future<List<ReviewModel>> getUserReviews(String userId) {
     return _service.getUserReviews(userId);
   }
+
+  Future<void> updateProfile(String userId, Map<String, dynamic> data) {
+    return _service.updateProfile(userId, data);
+  }
+
+  Future<void> deleteUserData(String userId) {
+    return _service.deleteUserData(userId);
+  }
 }

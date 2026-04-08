@@ -8,4 +8,8 @@ class BookmarkRepository {
   Future<void> toggleSavedPlace(String userId, String placeId, bool isSaving) {
     return _service.toggleSavedPlace(userId, placeId, isSaving);
   }
+
+  Future<void> toggleSavedEvent(String userId, String eventId, bool isSaving) {
+    return _service.toggleSavedEvent(userId, eventId, isSaving);
+  }
 }

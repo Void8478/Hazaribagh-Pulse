@@ -1,52 +1,56 @@
 import 'package:flutter/material.dart';
 
-class CategoryCard extends StatelessWidget {
-  final String title;
+class CategoryChip extends StatelessWidget {
+  final String label;
   final IconData icon;
+  final bool isSelected;
   final VoidCallback onTap;
 
-  const CategoryCard({
+  const CategoryChip({
     super.key,
-    required this.title,
+    required this.label,
     required this.icon,
+    required this.isSelected,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(14),
+          color: isSelected
+              ? colorScheme.primary.withValues(alpha: 0.15)
+              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
           border: Border.all(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+            color: isSelected
+                ? colorScheme.primary.withValues(alpha: 0.5)
+                : colorScheme.outline.withValues(alpha: 0.1),
+            width: isSelected ? 1.5 : 1,
           ),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              size: 40,
-              color: Theme.of(context).colorScheme.primary,
+              size: 18,
+              color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(width: 8),
             Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? colorScheme.primary : colorScheme.onSurface,
               ),
             ),
           ],

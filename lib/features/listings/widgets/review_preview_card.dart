@@ -9,15 +9,38 @@ class ReviewPreviewCard extends StatelessWidget {
     required this.review,
   });
 
+  String _timeAgo(DateTime timestamp) {
+    final now = DateTime.now();
+    final diff = now.difference(timestamp);
+
+    if (diff.inDays > 365) {
+      final years = (diff.inDays / 365).floor();
+      return '$years ${years == 1 ? 'year' : 'years'} ago';
+    } else if (diff.inDays > 30) {
+      final months = (diff.inDays / 30).floor();
+      return '$months ${months == 1 ? 'month' : 'months'} ago';
+    } else if (diff.inDays > 0) {
+      return '${diff.inDays} ${diff.inDays == 1 ? 'day' : 'days'} ago';
+    } else if (diff.inHours > 0) {
+      return '${diff.inHours} ${diff.inHours == 1 ? 'hour' : 'hours'} ago';
+    } else if (diff.inMinutes > 0) {
+      return '${diff.inMinutes} ${diff.inMinutes == 1 ? 'min' : 'mins'} ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 16.0),
+      margin: const EdgeInsets.only(bottom: 12.0),
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: colorScheme.outline.withValues(alpha: 0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -25,8 +48,14 @@ class ReviewPreviewCard extends StatelessWidget {
           Row(
             children: [
               CircleAvatar(
-                backgroundImage: NetworkImage(review.authorImageUrl),
+                backgroundImage: review.authorImageUrl.isNotEmpty
+                    ? NetworkImage(review.authorImageUrl)
+                    : null,
                 radius: 20,
+                backgroundColor: colorScheme.surfaceContainerHighest,
+                child: review.authorImageUrl.isEmpty
+                    ? Icon(Icons.person, size: 20, color: colorScheme.onSurfaceVariant)
+                    : null,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -35,20 +64,23 @@ class ReviewPreviewCard extends StatelessWidget {
                   children: [
                     Text(
                       review.authorName,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.onSurface,
+                      ),
                     ),
+                    const SizedBox(height: 2),
                     Row(
                       children: [
-                        const Icon(Icons.star, color: Colors.amber, size: 14),
-                        const SizedBox(width: 4),
-                        Text(
-                          review.rating.toString(),
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                        ),
+                        ...List.generate(5, (i) => Icon(
+                          i < review.rating.round() ? Icons.star_rounded : Icons.star_border_rounded,
+                          color: Colors.amber,
+                          size: 14,
+                        )),
                         const SizedBox(width: 8),
                         Text(
-                          '2 days ago', // Ideally formatted from review.timestamp
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          _timeAgo(review.timestamp),
+                          style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -60,7 +92,12 @@ class ReviewPreviewCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             review.text,
-            style: const TextStyle(height: 1.4),
+            style: TextStyle(
+              height: 1.4,
+              color: colorScheme.onSurface.withValues(alpha: 0.85),
+            ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

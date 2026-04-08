@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/widgets/place_card.dart';
+import '../../../core/widgets/premium_empty_state.dart';
+import '../../../core/widgets/animated_list_item.dart';
 import '../../listings/providers/listing_providers.dart';
 
 class CategoryResultsScreen extends ConsumerWidget {
@@ -11,6 +13,7 @@ class CategoryResultsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
     final listingsAsync = ref.watch(categoryListingsProvider(categoryName));
 
     return Scaffold(
@@ -25,17 +28,20 @@ class CategoryResultsScreen extends ConsumerWidget {
         ),
       ),
       body: listingsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => _buildLoadingSkeleton(context),
         error: (error, stack) => Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              Icon(Icons.error_outline, size: 48, color: colorScheme.error),
               const SizedBox(height: 16),
-              Text('Error loading listings: $error'),
-              ElevatedButton(
-                onPressed: () =>
-                    ref.refresh(categoryListingsProvider(categoryName)),
+              Text(
+                'Error loading listings',
+                style: TextStyle(color: colorScheme.onSurface, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              FilledButton.tonal(
+                onPressed: () => ref.refresh(categoryListingsProvider(categoryName)),
                 child: const Text('Retry'),
               ),
             ],
@@ -44,36 +50,56 @@ class CategoryResultsScreen extends ConsumerWidget {
         data: (places) {
           if (places.isEmpty) {
             return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No listings found for $categoryName yet.',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
-                  ),
-                ],
+              child: PremiumEmptyState(
+                icon: Icons.search_off_rounded,
+                title: 'No listings found',
+                subtitle: 'No listings available for $categoryName yet.',
               ),
             );
           }
 
           return ListView.builder(
+            physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.only(
               top: 16.0,
+              left: 16.0,
               right: 16.0,
               bottom: 32.0,
             ),
             itemCount: places.length,
             itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: PlaceCard(place: places[index], width: double.infinity),
+              return AnimatedListItem(
+                delay: index * 80,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: PlaceCard(place: places[index], width: double.infinity),
+                ),
               );
             },
           );
         },
       ),
+    );
+  }
+
+  Widget _buildLoadingSkeleton(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 5,
+      itemBuilder: (context, index) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Container(
+            height: 180,
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        );
+      },
     );
   }
 }

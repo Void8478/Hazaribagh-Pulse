@@ -20,5 +20,20 @@ class FirestoreBookmarkService {
     }
   }
 
-  // Similar logic can be applied to Events if needed: toggleSavedEvent
+  Future<void> toggleSavedEvent(String userId, String eventId, bool isSaving) async {
+    try {
+      final userRef = _firestore.collection('users').doc(userId);
+      if (isSaving) {
+        await userRef.update({
+          'savedEventIds': FieldValue.arrayUnion([eventId])
+        });
+      } else {
+        await userRef.update({
+          'savedEventIds': FieldValue.arrayRemove([eventId])
+        });
+      }
+    } catch (e) {
+      throw Exception('Failed to toggle saved event: $e');
+    }
+  }
 }

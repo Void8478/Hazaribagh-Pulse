@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../listings/widgets/review_preview_card.dart';
 import '../providers/profile_providers.dart';
+import '../../../core/widgets/premium_empty_state.dart';
 
 class UserReviewsSection extends ConsumerWidget {
   final String userId;
@@ -10,6 +11,7 @@ class UserReviewsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
     final reviewsAsync = ref.watch(userReviewsProvider(userId));
 
     return Column(
@@ -20,26 +22,38 @@ class UserReviewsSection extends ConsumerWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Recent Contributions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(
+                'Recent Contributions',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.onSurface,
+                ),
+              ),
               TextButton(
-                onPressed: () {},
-                child: const Text('See All'),
+                onPressed: () {
+                  // TODO: Navigate to full reviews list when route exists
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: colorScheme.primary,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(50, 30),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('See All', style: TextStyle(fontWeight: FontWeight.w600)),
               ),
             ],
           ),
         ),
+        const SizedBox(height: 8),
         
         reviewsAsync.when(
           data: (reviews) {
             if (reviews.isEmpty) {
-              return const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Center(
-                  child: Text(
-                    'No reviews written yet.',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
+              return const PremiumEmptyState(
+                icon: Icons.rate_review_outlined,
+                title: 'No contributions yet',
+                subtitle: 'Write your first review and help the community!',
               );
             }
             
@@ -56,7 +70,11 @@ class UserReviewsSection extends ConsumerWidget {
           ),
           error: (error, stack) => Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Text('Failed to load recent contributions: $error'),
+            child: PremiumEmptyState(
+              icon: Icons.error_outline,
+              title: 'Could not load contributions',
+              subtitle: 'Pull down to retry',
+            ),
           ),
         ),
       ],
