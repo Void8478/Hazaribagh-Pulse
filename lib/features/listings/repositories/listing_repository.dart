@@ -30,4 +30,8 @@ class ListingRepository {
   Future<PlaceModel> fetchListingById(String id) {
     return _service.getListingById(id);
   }
+
+  Future<List<PlaceModel>> fetchListingsByUserId(String userId) {
+    return _service.getListingsByUserId(userId);
+  }
 }

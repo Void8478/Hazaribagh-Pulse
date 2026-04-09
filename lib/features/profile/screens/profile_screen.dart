@@ -7,6 +7,7 @@ import '../widgets/user_header.dart';
 import '../widgets/saved_items_section.dart';
 import '../widgets/profile_menu_tiles.dart';
 import '../widgets/user_reviews_section.dart';
+import '../services/account_deletion_service.dart';
 import '../../auth/services/auth_provider.dart';
 import '../../bookmarks/providers/bookmark_providers.dart';
 
@@ -163,7 +164,7 @@ class ProfileScreen extends ConsumerWidget {
                     
                     ProfileMenuTiles(
                       onLogout: () => _showLogoutDialog(context, ref),
-                      onDeleteAccount: () => _showDeleteDialog(context, ref),
+                      onDeleteAccount: () => _showDeleteDialog(context),
                     ),
                   ],
                 ),
@@ -248,9 +249,9 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _showDeleteDialog(BuildContext context, WidgetRef ref) async {
+  Future<void> _showDeleteDialog(BuildContext context) async {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     final bool? shouldDelete = await showDialog<bool>(
       context: context,
       builder: (BuildContext ctx) {
@@ -269,29 +270,43 @@ class ProfileScreen extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('This will permanently delete your account, your profile data, and all associated authentications. This cannot be undone.'),
+                  const Text(
+                    'This will permanently delete your account, profile, posts, places, events, reviews, comments, saves, likes, notifications, and associated authentication data. This cannot be undone.',
+                  ),
                   const SizedBox(height: 8),
                   Text(
-                    'Your reviews will remain visible as "Deleted User".',
-                    style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                    'After confirmation, your account will be erased from this app permanently.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  const Text('Type "DELETE" below to confirm:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Type "DELETE" below to confirm:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 8),
                   TextField(
                     onChanged: (val) => setState(() => typedText = val),
                     decoration: InputDecoration(
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       hintText: 'DELETE',
                     ),
                   ),
                 ],
               ),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(ctx).pop(false),
-                  style: TextButton.styleFrom(foregroundColor: colorScheme.onSurface),
+                  style: TextButton.styleFrom(
+                    foregroundColor: colorScheme.onSurface,
+                  ),
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
@@ -312,7 +327,7 @@ class ProfileScreen extends ConsumerWidget {
     );
 
     if (shouldDelete == true && context.mounted) {
-      await ref.read(authProvider.notifier).deleteAccount();
+      await deleteAccountPermanently(context);
     }
   }
 

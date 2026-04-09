@@ -44,7 +44,14 @@ class AppTheme {
         brightness: Brightness.light,
       ),
       scaffoldBackgroundColor: bgLight,
+      canvasColor: bgLight,
       useMaterial3: true,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
       textTheme: GoogleFonts.interTextTheme().copyWith(
         displayLarge: GoogleFonts.inter(color: onSurfaceLight, fontWeight: FontWeight.bold),
         displayMedium: GoogleFonts.inter(color: onSurfaceLight, fontWeight: FontWeight.bold),
@@ -60,8 +67,28 @@ class AppTheme {
         elevation: 0,
         backgroundColor: Colors.transparent,
         scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         iconTheme: IconThemeData(color: onSurfaceLight),
         titleTextStyle: TextStyle(color: onSurfaceLight, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: surfaceLight,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        indicatorColor: primaryGoldLight.withValues(alpha: 0.18),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final isSelected = states.contains(WidgetState.selected);
+          return TextStyle(
+            color: isSelected ? onSurfaceLight : onSurfaceVariantLight,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          );
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          final isSelected = states.contains(WidgetState.selected);
+          return IconThemeData(
+            color: isSelected ? onSurfaceLight : onSurfaceVariantLight,
+          );
+        }),
       ),
       cardTheme: CardThemeData(
         elevation: 4,
@@ -89,6 +116,9 @@ class AppTheme {
           elevation: 0,
         ),
       ),
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      hoverColor: Colors.transparent,
       iconTheme: const IconThemeData(color: onSurfaceVariantLight),
       dividerTheme: const DividerThemeData(color: borderLight, space: 1, thickness: 1),
     );
@@ -106,7 +136,14 @@ class AppTheme {
         brightness: Brightness.dark,
       ),
       scaffoldBackgroundColor: bgDark,
+      canvasColor: bgDark,
       useMaterial3: true,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
       textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).copyWith(
         displayLarge: GoogleFonts.inter(color: onSurfaceDark, fontWeight: FontWeight.bold),
         displayMedium: GoogleFonts.inter(color: onSurfaceDark, fontWeight: FontWeight.bold),
@@ -122,8 +159,28 @@ class AppTheme {
         elevation: 0,
         backgroundColor: Colors.transparent,
         scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         iconTheme: IconThemeData(color: onSurfaceDark),
         titleTextStyle: TextStyle(color: onSurfaceDark, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: surfaceDark,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        indicatorColor: primaryGoldDark.withValues(alpha: 0.18),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final isSelected = states.contains(WidgetState.selected);
+          return TextStyle(
+            color: isSelected ? onSurfaceDark : onSurfaceVariantDark,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          );
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          final isSelected = states.contains(WidgetState.selected);
+          return IconThemeData(
+            color: isSelected ? onSurfaceDark : onSurfaceVariantDark,
+          );
+        }),
       ),
       cardTheme: CardThemeData(
         elevation: 0, // No shadows in dark mode!
@@ -152,6 +209,9 @@ class AppTheme {
           elevation: 0,
         ),
       ),
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      hoverColor: Colors.transparent,
       iconTheme: const IconThemeData(color: onSurfaceVariantDark),
       dividerTheme: const DividerThemeData(color: borderDark, space: 1, thickness: 1),
     );

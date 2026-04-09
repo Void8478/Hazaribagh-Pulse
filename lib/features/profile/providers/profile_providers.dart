@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hazaribagh_pulse/models/review_model.dart';
 import 'package:hazaribagh_pulse/models/user_model.dart';
+import '../../../core/network/supabase_client.dart';
 import '../../auth/services/auth_provider.dart';
 import '../services/supabase_profile_service.dart';
 import '../repositories/profile_repository.dart';
@@ -21,14 +21,15 @@ final userReviewsProvider = FutureProvider.family<List<ReviewModel>, String>((re
 
 // Stream the current user's profile natively from Supabase
 final userProfileProvider = StreamProvider<UserModel?>((ref) {
-  final user = ref.watch(authStateChangesProvider).value;
+  final user = ref.watch(authProvider.select((value) => value.user));
   if (user == null) {
     return Stream.value(null);
   }
 
+  final supabase = ref.watch(supabaseClientProvider);
   final service = ref.watch(profileServiceProvider);
 
-  return Supabase.instance.client
+  return supabase
       .from('profiles')
       .stream(primaryKey: ['id'])
       .eq('id', user.id)

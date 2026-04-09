@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hazaribagh_pulse/models/review_model.dart';
 
 class FullReviewCard extends StatelessWidget {
@@ -24,22 +25,34 @@ class FullReviewCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                backgroundImage: review.authorImageUrl.isNotEmpty ? NetworkImage(review.authorImageUrl) : null,
-                child: review.authorImageUrl.isEmpty 
-                    ? Icon(Icons.person, color: Theme.of(context).colorScheme.onSurfaceVariant) 
+              InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: review.userId.isNotEmpty
+                    ? () => context.push('/users/${review.userId}')
                     : null,
+                child: CircleAvatar(
+                  radius: 24,
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  backgroundImage: review.authorImageUrl.isNotEmpty ? NetworkImage(review.authorImageUrl) : null,
+                  child: review.authorImageUrl.isEmpty 
+                      ? Icon(Icons.person, color: Theme.of(context).colorScheme.onSurfaceVariant) 
+                      : null,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      review.authorName,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: review.userId.isNotEmpty
+                          ? () => context.push('/users/${review.userId}')
+                          : null,
+                      child: Text(
+                        review.authorName,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
                     ),
                     Row(
                       children: [

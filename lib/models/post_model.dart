@@ -1,6 +1,9 @@
+import 'public_author_model.dart';
+
 class PostModel {
   final String id;
   final String userId;
+  final PublicAuthorModel creator;
   final String title;
   final String description;
   final String imageUrl;
@@ -13,6 +16,7 @@ class PostModel {
   const PostModel({
     required this.id,
     required this.userId,
+    required this.creator,
     required this.title,
     required this.description,
     required this.imageUrl,
@@ -31,9 +35,18 @@ class PostModel {
                 ? Map<String, dynamic>.from(data['categories'] as Map)
                 : null;
 
+    final profileMap =
+        data['profiles'] is Map<String, dynamic>
+            ? data['profiles'] as Map<String, dynamic>
+            : data['profiles'] is Map
+                ? Map<String, dynamic>.from(data['profiles'] as Map)
+                : null;
+    final userId = data['user_id']?.toString() ?? '';
+
     return PostModel(
       id: data['id']?.toString() ?? '',
-      userId: data['user_id']?.toString() ?? '',
+      userId: userId,
+      creator: PublicAuthorModel.fromProfile(profileMap, fallbackId: userId),
       title: (data['title'] ?? '').toString(),
       description: (data['description'] ?? '').toString(),
       imageUrl: (data['image_url'] ?? '').toString(),

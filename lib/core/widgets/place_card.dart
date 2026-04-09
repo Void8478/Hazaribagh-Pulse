@@ -1,22 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../models/place_model.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../features/interactions/providers/interaction_providers.dart';
+import '../../features/profile/widgets/public_profile_link.dart';
+import '../../models/place_model.dart';
 
 class PlaceCard extends ConsumerWidget {
-  final PlaceModel place;
-  final double width;
-
   const PlaceCard({
     super.key,
     required this.place,
-    this.width = 200,
+    this.width = 214,
   });
+
+  final PlaceModel place;
+  final double width;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final likesAsync = ref.watch(userLikesProvider);
     final bookmarksAsync = ref.watch(userBookmarksProvider);
 
@@ -24,123 +27,221 @@ class PlaceCard extends ConsumerWidget {
     final isBookmarked = bookmarksAsync.value?.contains(place.id) ?? false;
 
     return GestureDetector(
-      onTap: () {
-        context.push('/listing/${place.id}');
-      },
+      onTap: () => context.push('/listing/${place.id}'),
       child: Container(
         width: width,
-        margin: const EdgeInsets.only(left: 16.0, bottom: 8.0, right: 4.0),
+        margin: const EdgeInsets.only(left: 16, bottom: 10, right: 6),
         decoration: BoxDecoration(
-          color: Theme.of(context).cardTheme.color,
-          borderRadius: BorderRadius.circular(16),
-          border: Theme.of(context).cardTheme.shape is RoundedRectangleBorder
-              ? Border.fromBorderSide((Theme.of(context).cardTheme.shape as RoundedRectangleBorder).side)
-              : null,
-          boxShadow: Theme.of(context).cardTheme.elevation! > 0 ? [
+          color: theme.cardTheme.color,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: colorScheme.outline.withValues(alpha: 0.08),
+          ),
+          boxShadow: [
             BoxShadow(
-              color: Theme.of(context).cardTheme.shadowColor ?? Colors.black12,
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
-          ] : null,
+          ],
         ),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: Stack(
-                children: [
-                  Image.network(
-                    place.imageUrl,
-                    height: 120,
-                    width: width,
-                    fit: BoxFit.cover,
-                    filterQuality: FilterQuality.low,
-                    cacheWidth: 420,
-                    gaplessPlayback: true,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        height: 120,
-                        width: width,
-                        color: colorScheme.surfaceContainerHighest,
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      height: 120,
+            Stack(
+              children: [
+                Image.network(
+                  place.imageUrl,
+                  height: 132,
+                  width: width,
+                  fit: BoxFit.cover,
+                  filterQuality: FilterQuality.low,
+                  cacheWidth: 460,
+                  gaplessPlayback: true,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      height: 132,
                       width: width,
-                      color: colorScheme.surfaceContainerHighest,
-                      child: Icon(Icons.image_not_supported, color: colorScheme.onSurfaceVariant),
-                    ),
-                  ),
-                  if (place.isSponsored)
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.amber,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withAlpha(20), blurRadius: 4, offset: const Offset(0, 2))
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            colorScheme.surfaceContainerHighest,
+                            colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
                           ],
                         ),
-                        child: const Text(
-                          'Sponsored',
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87),
-                        ),
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    height: 132,
+                    width: width,
+                    color: colorScheme.surfaceContainerHighest,
+                    child: Icon(
+                      Icons.image_not_supported_outlined,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.06),
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.34),
+                        ],
                       ),
                     ),
-                ],
-              ),
+                  ),
+                ),
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (place.isSponsored)
+                        _TopBadge(
+                          label: 'Sponsored',
+                          background: const Color(0xFFF6D26B),
+                          foreground: const Color(0xFF2A2110),
+                        ),
+                      if (place.isVerified)
+                        _TopBadge(
+                          label: 'Verified',
+                          background: Colors.white.withValues(alpha: 0.92),
+                          foreground: const Color(0xFF16202A),
+                        ),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.58),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.star_rounded, color: Color(0xFFF8D66D), size: 14),
+                        const SizedBox(width: 4),
+                        Text(
+                          place.rating.toStringAsFixed(1),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-            // Content
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     place.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    place.category,
-                    style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                    ),
                   ),
                   const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _InfoChip(
+                        label: place.category,
+                        icon: Icons.category_outlined,
+                      ),
+                      if (place.priceRange.isNotEmpty)
+                        _InfoChip(
+                          label: place.priceRange,
+                          icon: Icons.payments_outlined,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  PublicProfileLink(
+                    userId: place.userId,
+                    name: place.creator.displayName,
+                    username: place.creator.username,
+                    avatarUrl: place.creator.avatarUrl,
+                    compact: true,
+                  ),
+                  if (place.address.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 15,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            place.address,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 14),
                   Row(
                     children: [
-                      const Icon(Icons.star, color: Colors.amber, size: 16),
-                      const SizedBox(width: 4),
                       Text(
-                        '${place.rating} (${place.reviewCount})',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        '${place.reviewCount} reviews',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const Spacer(),
                       Consumer(
                         builder: (context, ref, child) {
-                          final likeCountAsync = ref.watch(itemLikeCountProvider('place:${place.id}'));
+                          final likeCountAsync =
+                              ref.watch(itemLikeCountProvider('place:${place.id}'));
                           final likeCount = likeCountAsync.value ?? 0;
                           return Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              IconButton(
-                                constraints: const BoxConstraints(),
-                                padding: const EdgeInsets.all(4),
-                                icon: Icon(
-                                  isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded, 
-                                  size: 18, 
-                                  color: isLiked ? Colors.red : colorScheme.onSurfaceVariant,
-                                ),
-                                onPressed: () async {
+                              _ActionIcon(
+                                icon: isLiked
+                                    ? Icons.favorite_rounded
+                                    : Icons.favorite_border_rounded,
+                                color: isLiked
+                                    ? const Color(0xFFE25555)
+                                    : colorScheme.onSurfaceVariant,
+                                onTap: () async {
                                   try {
-                                    await ref.read(userLikesProvider.notifier).toggleLike(place.id, 'place');
+                                    await ref
+                                        .read(userLikesProvider.notifier)
+                                        .toggleLike(place.id, 'place');
                                   } catch (e) {
                                     if (e.toString().contains('auth_required')) {
                                       if (!context.mounted) return;
@@ -151,45 +252,139 @@ class PlaceCard extends ConsumerWidget {
                               ),
                               if (likeCount > 0)
                                 Padding(
-                                  padding: const EdgeInsets.only(right: 6.0),
+                                  padding: const EdgeInsets.only(left: 4, right: 8),
                                   child: Text(
                                     '$likeCount',
-                                    style: TextStyle(
-                                      fontSize: 12,
+                                    style: theme.textTheme.bodySmall?.copyWith(
                                       color: colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                 ),
+                              _ActionIcon(
+                                icon: isBookmarked
+                                    ? Icons.bookmark_rounded
+                                    : Icons.bookmark_border_rounded,
+                                color: isBookmarked
+                                    ? colorScheme.primary
+                                    : colorScheme.onSurfaceVariant,
+                                onTap: () async {
+                                  try {
+                                    await ref
+                                        .read(userBookmarksProvider.notifier)
+                                        .toggleBookmark(place.id, 'place');
+                                  } catch (e) {
+                                    if (e.toString().contains('auth_required')) {
+                                      if (!context.mounted) return;
+                                      context.push('/login');
+                                    }
+                                  }
+                                },
+                              ),
                             ],
                           );
-                        },
-                      ),
-                      IconButton(
-                        constraints: const BoxConstraints(),
-                        padding: const EdgeInsets.all(4),
-                        icon: Icon(
-                          isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, 
-                          size: 18, 
-                          color: isBookmarked ? colorScheme.primary : colorScheme.onSurfaceVariant,
-                        ),
-                        onPressed: () async {
-                          try {
-                            await ref.read(userBookmarksProvider.notifier).toggleBookmark(place.id, 'place');
-                          } catch (e) {
-                            if (e.toString().contains('auth_required')) {
-                              if (!context.mounted) return;
-                              context.push('/login');
-                            }
-                          }
                         },
                       ),
                     ],
                   ),
                 ],
               ),
-            )
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _TopBadge extends StatelessWidget {
+  const _TopBadge({
+    required this.label,
+    required this.background,
+    required this.foreground,
+  });
+
+  final String label;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: foreground,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.1,
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({
+    required this.label,
+    required this.icon,
+  });
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: colorScheme.onSurfaceVariant,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionIcon extends StatelessWidget {
+  const _ActionIcon({
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Icon(icon, size: 19, color: color),
       ),
     );
   }

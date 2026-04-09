@@ -6,6 +6,7 @@ import '../../comments/widgets/comment_section.dart';
 import '../../listings/widgets/info_chip.dart';
 import '../providers/post_providers.dart';
 import '../../interactions/providers/interaction_providers.dart';
+import '../../profile/widgets/public_profile_link.dart';
 import 'package:go_router/go_router.dart';
 
 class PostDetailScreen extends ConsumerWidget {
@@ -168,6 +169,14 @@ class PostDetailScreen extends ConsumerWidget {
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.5,
                         ),
+                      ),
+                      const SizedBox(height: 16),
+                      PublicProfileLink(
+                        userId: post.userId,
+                        name: post.creator.displayName,
+                        username: post.creator.username,
+                        avatarUrl: post.creator.avatarUrl,
+                        subtitle: 'Creator',
                       ),
                       const SizedBox(height: 24),
                       if (post.location.isNotEmpty) ...[

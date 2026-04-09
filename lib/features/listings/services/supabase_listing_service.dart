@@ -7,17 +7,41 @@ class SupabaseListingService {
 
   Object _normalizedId(String id) => int.tryParse(id) ?? id;
 
+  Future<Map<String, Map<String, dynamic>>> _fetchProfilesByUserIds(
+    Iterable<String> userIds,
+  ) async {
+    final ids = userIds.where((id) => id.trim().isNotEmpty).toSet().toList();
+    if (ids.isEmpty) return {};
+
+    final response = await _supabase
+        .from('profiles')
+        .select('id, full_name, username, avatar_url')
+        .filter('id', 'in', ids);
+
+    final rows = (response as List).cast<Map<String, dynamic>>();
+    return {
+      for (final row in rows)
+        if (row['id'] != null) row['id'].toString(): Map<String, dynamic>.from(row),
+    };
+  }
+
   Map<String, dynamic> _mergeListingWithCategory(
     Map<String, dynamic> listing,
-    Map<String, String> categoryNamesById,
-  ) {
+    Map<String, String> categoryNamesById, {
+    Map<String, Map<String, dynamic>> profilesById = const {},
+  }) {
     final merged = Map<String, dynamic>.from(listing);
     final categoryId = listing['category_id']?.toString();
+    final userId = listing['user_id']?.toString();
 
     if ((merged['category'] == null || merged['category'].toString().trim().isEmpty) &&
         categoryId != null &&
         categoryNamesById.containsKey(categoryId)) {
       merged['category'] = categoryNamesById[categoryId];
+    }
+
+    if (userId != null && profilesById.containsKey(userId)) {
+      merged['profiles'] = profilesById[userId];
     }
 
     return merged;
@@ -88,8 +112,17 @@ class SupabaseListingService {
 
       final response = await query;
       final rows = (response as List).cast<Map<String, dynamic>>();
+      final profilesById = await _fetchProfilesByUserIds(
+        rows.map((row) => row['user_id']?.toString() ?? ''),
+      );
       return rows
-          .map((data) => _mergeListingWithCategory(data, categoryNamesById))
+          .map(
+            (data) => _mergeListingWithCategory(
+              data,
+              categoryNamesById,
+              profilesById: profilesById,
+            ),
+          )
           .map(PlaceModel.fromJson)
           .toList();
     } catch (e) {
@@ -172,14 +205,44 @@ class SupabaseListingService {
       if (data == null) {
         throw Exception('Listing not found');
       }
+      final profilesById = await _fetchProfilesByUserIds([
+        data['user_id']?.toString() ?? '',
+      ]);
       return PlaceModel.fromJson(
         _mergeListingWithCategory(
           Map<String, dynamic>.from(data),
           categoryNamesById,
+          profilesById: profilesById,
         ),
       );
     } catch (e) {
       throw Exception('Failed to fetch listing details: $e');
+    }
+  }
+
+  Future<List<PlaceModel>> getListingsByUserId(String userId) async {
+    try {
+      final categoryNamesById = await _fetchCategoryNamesById();
+      final response = await _supabase
+          .from('listings')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+
+      final rows = (response as List).cast<Map<String, dynamic>>();
+      final profilesById = await _fetchProfilesByUserIds([userId]);
+      return rows
+          .map(
+            (data) => _mergeListingWithCategory(
+              data,
+              categoryNamesById,
+              profilesById: profilesById,
+            ),
+          )
+          .map(PlaceModel.fromJson)
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to fetch user listings: $e');
     }
   }
 }

@@ -16,6 +16,8 @@ final itemLikeCountProvider = FutureProvider.family.autoDispose<int, String>((re
 });
 
 class UserLikesNotifier extends AsyncNotifier<Set<String>> {
+  final SupabaseClient _supabase = Supabase.instance.client;
+
   @override
   Future<Set<String>> build() async {
     final service = ref.watch(interactionServiceProvider);
@@ -30,7 +32,7 @@ class UserLikesNotifier extends AsyncNotifier<Set<String>> {
   }
 
   Future<void> toggleLike(String contentId, String contentType) async {
-    if (Supabase.instance.client.auth.currentUser == null) {
+    if (_supabase.auth.currentUser == null) {
       throw Exception('auth_required');
     }
 
@@ -64,6 +66,8 @@ final userLikesProvider = AsyncNotifierProvider<UserLikesNotifier, Set<String>>(
 });
 
 class UserBookmarksNotifier extends AsyncNotifier<Set<String>> {
+  final SupabaseClient _supabase = Supabase.instance.client;
+
   @override
   Future<Set<String>> build() async {
     final service = ref.watch(interactionServiceProvider);
@@ -78,7 +82,7 @@ class UserBookmarksNotifier extends AsyncNotifier<Set<String>> {
   }
 
   Future<void> toggleBookmark(String contentId, String contentType) async {
-    if (Supabase.instance.client.auth.currentUser == null) {
+    if (_supabase.auth.currentUser == null) {
       throw Exception('auth_required');
     }
 

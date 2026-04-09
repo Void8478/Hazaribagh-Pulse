@@ -19,7 +19,7 @@ class ExploreListingCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
-    final hasAuth = ref.watch(authStateChangesProvider).value != null;
+    final hasAuth = ref.watch(authProvider.select((value) => value.isAuthenticated));
     final userProfile = ref.watch(userProfileProvider);
     final isSaved = userProfile.value?.savedPlaceIds.contains(place.id) ?? false;
     final isDark = Theme.of(context).brightness == Brightness.dark;

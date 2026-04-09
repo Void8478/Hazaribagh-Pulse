@@ -1,180 +1,275 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-class NotificationsScreen extends StatefulWidget {
+import '../../../models/app_notification_model.dart';
+import '../../notifications/providers/notification_providers.dart';
+
+class NotificationsScreen extends ConsumerWidget {
   const NotificationsScreen({super.key});
 
   @override
-  State<NotificationsScreen> createState() => _NotificationsScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notificationsAsync = ref.watch(notificationsProvider);
+    final unreadCount = ref.watch(unreadNotificationCountProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Notifications'),
+        actions: [
+          if (unreadCount > 0)
+            TextButton(
+              onPressed: () async {
+                await ref.read(notificationServiceProvider).markAllAsRead();
+              },
+              child: const Text('Mark all read'),
+            ),
+        ],
+      ),
+      body: notificationsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stack) => _NotificationsError(
+          details: '$error',
+          onRetry: () => ref.invalidate(notificationsProvider),
+        ),
+        data: (notifications) {
+          if (notifications.isEmpty) {
+            return const _NotificationsEmpty();
+          }
+
+          return RefreshIndicator(
+            onRefresh: () async => ref.invalidate(notificationsProvider),
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              itemCount: notifications.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final notification = notifications[index];
+                return _NotificationTile(notification: notification);
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
 }
 
-class _NotificationsScreenState extends State<NotificationsScreen> {
-  bool _pushNotifications = true;
-  bool _emailUpdates = false;
-  bool _newReviews = true;
-  bool _eventReminders = true;
-  bool _promotions = false;
-  bool _loaded = false;
+class _NotificationTile extends ConsumerWidget {
+  const _NotificationTile({required this.notification});
+
+  final AppNotificationModel notification;
+
+  String _timeAgo(DateTime timestamp) {
+    final diff = DateTime.now().difference(timestamp);
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'Just now';
+  }
+
+  String? _destinationRoute() {
+    if (notification.contentId.isEmpty) return null;
+
+    switch (notification.contentType) {
+      case 'post':
+        return '/post/${notification.contentId}';
+      case 'place':
+        return '/listing/${notification.contentId}';
+      case 'event':
+        return '/event/${notification.contentId}';
+      default:
+        return null;
+    }
+  }
 
   @override
-  void initState() {
-    super.initState();
-    _loadPreferences();
-  }
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final destination = _destinationRoute();
 
-  Future<void> _loadPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _pushNotifications = prefs.getBool('notif_push') ?? true;
-      _emailUpdates = prefs.getBool('notif_email') ?? false;
-      _newReviews = prefs.getBool('notif_reviews') ?? true;
-      _eventReminders = prefs.getBool('notif_events') ?? true;
-      _promotions = prefs.getBool('notif_promotions') ?? false;
-      _loaded = true;
-    });
-  }
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: () async {
+        await ref.read(notificationServiceProvider).markAsRead(notification.id);
 
-  Future<void> _save(String key, bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(key, value);
+        if (!context.mounted) return;
+        if (destination != null) {
+          context.push(destination);
+        } else if (notification.actorUserId.isNotEmpty) {
+          context.push('/users/${notification.actorUserId}');
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: notification.isRead
+              ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.18)
+              : colorScheme.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: notification.isRead
+                ? colorScheme.outline.withValues(alpha: 0.08)
+                : colorScheme.primary.withValues(alpha: 0.18),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              backgroundImage: notification.actor.avatarUrl.isNotEmpty
+                  ? NetworkImage(notification.actor.avatarUrl)
+                  : null,
+              child: notification.actor.avatarUrl.isEmpty
+                  ? Icon(Icons.person_outline, color: colorScheme.onSurfaceVariant)
+                  : null,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          notification.body,
+                          style: TextStyle(
+                            fontSize: 14,
+                            height: 1.4,
+                            fontWeight: notification.isRead ? FontWeight.w500 : FontWeight.w700,
+                            color: colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _timeAgo(notification.createdAt),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        notification.actor.usernameLabel.isNotEmpty
+                            ? notification.actor.usernameLabel
+                            : notification.title,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      if (!notification.isRead) ...[
+                        const SizedBox(width: 10),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
+}
+
+class _NotificationsEmpty extends StatelessWidget {
+  const _NotificationsEmpty();
 
   @override
   Widget build(BuildContext context) {
-
-    if (!_loaded) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Notifications')),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildSection(
-            context,
-            title: 'General',
-            children: [
-              _buildSwitch(
-                context,
-                icon: Icons.notifications_active_outlined,
-                title: 'Push Notifications',
-                subtitle: 'Receive push notifications on your device',
-                value: _pushNotifications,
-                onChanged: (v) {
-                  setState(() => _pushNotifications = v);
-                  _save('notif_push', v);
-                },
-              ),
-              _buildSwitch(
-                context,
-                icon: Icons.email_outlined,
-                title: 'Email Updates',
-                subtitle: 'Receive weekly email digests',
-                value: _emailUpdates,
-                onChanged: (v) {
-                  setState(() => _emailUpdates = v);
-                  _save('notif_email', v);
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildSection(
-            context,
-            title: 'Activity',
-            children: [
-              _buildSwitch(
-                context,
-                icon: Icons.rate_review_outlined,
-                title: 'New Reviews',
-                subtitle: 'Notify when someone reviews a place you saved',
-                value: _newReviews,
-                onChanged: (v) {
-                  setState(() => _newReviews = v);
-                  _save('notif_reviews', v);
-                },
-              ),
-              _buildSwitch(
-                context,
-                icon: Icons.event_outlined,
-                title: 'Event Reminders',
-                subtitle: 'Remind about upcoming saved events',
-                value: _eventReminders,
-                onChanged: (v) {
-                  setState(() => _eventReminders = v);
-                  _save('notif_events', v);
-                },
-              ),
-              _buildSwitch(
-                context,
-                icon: Icons.local_offer_outlined,
-                title: 'Promotions',
-                subtitle: 'Receive promotional offers and deals',
-                value: _promotions,
-                onChanged: (v) {
-                  setState(() => _promotions = v);
-                  _save('notif_promotions', v);
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSection(BuildContext context, {required String title, required List<Widget> children}) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colorScheme.outline.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-            child: Text(
-              title,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.notifications_none_rounded, size: 54, color: colorScheme.primary),
+            const SizedBox(height: 14),
+            Text(
+              'No notifications yet',
               style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: colorScheme.primary,
-                letterSpacing: 0.5,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: colorScheme.onSurface,
               ),
             ),
-          ),
-          ...children,
-        ],
+            const SizedBox(height: 8),
+            Text(
+              'When people like, comment on, or review your content, it will show up here.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
       ),
     );
   }
+}
 
-  Widget _buildSwitch(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
+class _NotificationsError extends StatelessWidget {
+  const _NotificationsError({
+    required this.details,
+    required this.onRetry,
+  });
+
+  final String details;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return SwitchListTile(
-      secondary: Icon(icon, color: colorScheme.primary.withValues(alpha: 0.7)),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-      subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
-      value: value,
-      onChanged: onChanged,
-      activeThumbColor: colorScheme.primary,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 48, color: colorScheme.error),
+            const SizedBox(height: 12),
+            Text(
+              'Could not load notifications',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              details,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.tonal(
+              onPressed: onRetry,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

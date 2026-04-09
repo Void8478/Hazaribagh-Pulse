@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:hazaribagh_pulse/models/comment_model.dart';
 
@@ -53,15 +54,21 @@ class CommentCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: colorScheme.surfaceContainerHighest,
-            backgroundImage: comment.authorAvatarUrl.isNotEmpty
-                ? NetworkImage(comment.authorAvatarUrl)
+          InkWell(
+            borderRadius: BorderRadius.circular(24),
+            onTap: comment.userId.isNotEmpty
+                ? () => context.push('/users/${comment.userId}')
                 : null,
-            child: comment.authorAvatarUrl.isEmpty
-                ? Icon(Icons.person_outline, color: colorScheme.onSurfaceVariant)
-                : null,
+            child: CircleAvatar(
+              radius: 22,
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              backgroundImage: comment.authorAvatarUrl.isNotEmpty
+                  ? NetworkImage(comment.authorAvatarUrl)
+                  : null,
+              child: comment.authorAvatarUrl.isEmpty
+                  ? Icon(Icons.person_outline, color: colorScheme.onSurfaceVariant)
+                  : null,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -72,10 +79,16 @@ class CommentCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Text(
-                        comment.authorName,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: comment.userId.isNotEmpty
+                            ? () => context.push('/users/${comment.userId}')
+                            : null,
+                        child: Text(
+                          comment.authorName,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),

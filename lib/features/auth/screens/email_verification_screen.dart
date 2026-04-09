@@ -62,7 +62,7 @@ class _EmailVerificationScreenState
 
   Future<void> _checkVerified() async {
     await ref.read(authProvider.notifier).checkEmailVerified();
-    // Navigation is handled by the router reacting to readyForApp.
+    // Navigation is handled by the router reacting to auth/session state.
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────

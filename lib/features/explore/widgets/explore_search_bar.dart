@@ -95,7 +95,7 @@ class _ExploreSearchBarState extends State<ExploreSearchBar>
             fontWeight: FontWeight.w500,
           ),
           decoration: InputDecoration(
-            hintText: 'Search places, categories...',
+            hintText: 'Search places, posts, events...',
             hintStyle: TextStyle(
               color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
               fontWeight: FontWeight.w400,

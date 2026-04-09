@@ -13,4 +13,8 @@ class EventRepository {
   Future<EventModel> fetchEventById(String id) {
     return _service.getEventById(id);
   }
+
+  Future<List<EventModel>> fetchEventsByUserId(String userId) {
+    return _service.getEventsByUserId(userId);
+  }
 }

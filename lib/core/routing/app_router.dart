@@ -26,6 +26,7 @@ import '../../features/profile/screens/help_center_screen.dart';
 import '../../features/profile/screens/notifications_screen.dart';
 import '../../features/profile/screens/privacy_settings_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
+import '../../features/profile/screens/public_profile_screen.dart';
 import '../../features/profile/screens/send_feedback_screen.dart';
 import '../../features/rankings/screens/rankings_screen.dart';
 import '../../features/reviews/screens/reviews_list_screen.dart';
@@ -35,15 +36,19 @@ import '../widgets/app_navigation_shell.dart';
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final supabaseUser = ref.watch(authStateChangesProvider);
   final auth = ref.watch(
     authProvider.select(
       (value) => (
+        isLoading: value.isLoading,
         isInitializing: value.isInitializing,
+        isAuthenticated: value.isAuthenticated,
+        initializationError: value.initializationError,
         emailVerificationPending: value.emailVerificationPending,
-        readyForApp: value.readyForApp,
       ),
     ),
+  );
+  final hasMetMinimumSplashDuration = ref.watch(
+    startupMinimumSplashDurationProvider,
   );
 
   return GoRouter(
@@ -51,21 +56,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/splash',
     redirect: (context, state) {
       final currentPath = state.matchedLocation;
-
-      if (auth.isInitializing || supabaseUser.isLoading) {
-        return currentPath == '/splash' ? null : '/splash';
-      }
-
-      if (auth.emailVerificationPending) {
-        return currentPath == '/verify-email' ? null : '/verify-email';
-      }
-
-      if (auth.readyForApp) {
-        return currentPath == '/auth-loading' ? null : '/auth-loading';
-      }
-
-      final isAuthenticated =
-          supabaseUser.hasValue && supabaseUser.value != null;
+      final isAuthenticated = auth.isAuthenticated;
       final isAuthFlow = currentPath == '/splash' ||
           currentPath == '/onboarding' ||
           currentPath == '/login' ||
@@ -75,12 +66,36 @@ final routerProvider = Provider<GoRouter>((ref) {
           currentPath == '/verify-email' ||
           currentPath == '/auth-loading';
 
-      if (isAuthenticated && isAuthFlow) {
-        return '/';
+      if (auth.isLoading && isAuthFlow && currentPath != '/splash') {
+        return '/splash';
       }
 
-      if (!isAuthenticated && !isAuthFlow) {
-        return '/onboarding';
+      if (currentPath == '/splash' && !hasMetMinimumSplashDuration) {
+        return null;
+      }
+
+      if (auth.isInitializing) {
+        return currentPath == '/splash' ? null : '/splash';
+      }
+
+      if (auth.initializationError != null && !isAuthenticated) {
+        return currentPath == '/splash' ? null : '/splash';
+      }
+
+      if (auth.emailVerificationPending) {
+        return currentPath == '/verify-email' ? null : '/verify-email';
+      }
+
+      if (!isAuthenticated) {
+        if (currentPath == '/splash') {
+          return '/login';
+        }
+
+        return isAuthFlow ? null : '/login';
+      }
+
+      if (isAuthenticated && isAuthFlow) {
+        return '/';
       }
 
       return null;
@@ -137,6 +152,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/feedback',
         builder: (context, state) => const SendFeedbackScreen(),
+      ),
+      GoRoute(
+        path: '/users/:userId',
+        builder: (context, state) => PublicProfileScreen(
+          userId: state.pathParameters['userId']!,
+        ),
       ),
       GoRoute(
         path: '/create-post',

@@ -1,10 +1,16 @@
+import 'public_author_model.dart';
+
 class PlaceModel {
   final String id;
+  final String userId;
+  final PublicAuthorModel creator;
   final String name;
   final String categoryId;
   final String category;
   final String imageUrl;
   final List<String> imageUrls;
+  final DateTime? createdAt;
+  final String location;
   final double rating;
   final int reviewCount;
   final bool isSponsored;
@@ -19,11 +25,15 @@ class PlaceModel {
 
   const PlaceModel({
     required this.id,
+    this.userId = '',
+    this.creator = const PublicAuthorModel(id: '', fullName: 'User'),
     required this.name,
     this.categoryId = '',
     required this.category,
     required this.imageUrl,
     this.imageUrls = const [],
+    this.createdAt,
+    this.location = '',
     required this.rating,
     required this.reviewCount,
     this.isSponsored = false,
@@ -52,8 +62,18 @@ class PlaceModel {
         data['imageUrl'] ??
         'https://via.placeholder.com/500';
 
+    final profileMap =
+        data['profiles'] is Map<String, dynamic>
+            ? data['profiles'] as Map<String, dynamic>
+            : data['profiles'] is Map
+                ? Map<String, dynamic>.from(data['profiles'] as Map)
+                : null;
+    final userId = data['user_id']?.toString() ?? '';
+
     return PlaceModel(
       id: data['id']?.toString() ?? '',
+      userId: userId,
+      creator: PublicAuthorModel.fromProfile(profileMap, fallbackId: userId),
       name: data['name'] ?? data['title'] ?? 'Unknown Place',
       categoryId:
           data['category_id']?.toString() ??
@@ -62,6 +82,10 @@ class PlaceModel {
       category: categoryName.toString(),
       imageUrl: imageUrl.toString(),
       imageUrls: List<String>.from(data['image_urls'] ?? data['imageUrls'] ?? []),
+      createdAt: data['created_at'] != null
+          ? DateTime.tryParse(data['created_at'].toString())
+          : null,
+      location: (data['location'] ?? data['location_label'] ?? '').toString(),
       rating: (data['rating'] ?? 0.0).toDouble(),
       reviewCount: data['review_count'] ?? data['reviewCount'] ?? 0,
       isSponsored: data['is_sponsored'] ?? data['isSponsored'] ?? false,

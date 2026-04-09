@@ -18,6 +18,7 @@ final bookmarkRepositoryProvider = Provider<BookmarkRepository>((ref) {
 
 // Fetch full Place objects based on saved place IDs
 final savedPlacesProvider = FutureProvider<List<PlaceModel>>((ref) async {
+  final supabase = Supabase.instance.client;
   final userProfile = await ref.watch(userProfileProvider.future);
   if (userProfile == null || userProfile.savedPlaceIds.isEmpty) {
     return [];
@@ -25,7 +26,7 @@ final savedPlacesProvider = FutureProvider<List<PlaceModel>>((ref) async {
 
   final chunk = userProfile.savedPlaceIds.take(10).toList();
   
-  final response = await Supabase.instance.client
+  final response = await supabase
       .from('listings')
       .select()
       .filter('id', 'in', chunk);
@@ -35,6 +36,7 @@ final savedPlacesProvider = FutureProvider<List<PlaceModel>>((ref) async {
 
 // Fetch saved events — tries Supabase first, falls back to mock data
 final savedEventsProvider = FutureProvider<List<EventModel>>((ref) async {
+  final supabase = Supabase.instance.client;
   final userProfile = await ref.watch(userProfileProvider.future);
   if (userProfile == null || userProfile.savedEventIds.isEmpty) {
     return [];
@@ -45,7 +47,7 @@ final savedEventsProvider = FutureProvider<List<EventModel>>((ref) async {
   // Try Supabase first
   try {
     final chunk = savedIds.take(10).toList();
-    final response = await Supabase.instance.client
+    final response = await supabase
         .from('events')
         .select()
         .filter('id', 'in', chunk);

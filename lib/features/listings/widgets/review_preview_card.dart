@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hazaribagh_pulse/models/review_model.dart';
 
 class ReviewPreviewCard extends StatelessWidget {
@@ -47,26 +48,38 @@ class ReviewPreviewCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              CircleAvatar(
-                backgroundImage: review.authorImageUrl.isNotEmpty
-                    ? NetworkImage(review.authorImageUrl)
+              InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: review.userId.isNotEmpty
+                    ? () => context.push('/users/${review.userId}')
                     : null,
-                radius: 20,
-                backgroundColor: colorScheme.surfaceContainerHighest,
-                child: review.authorImageUrl.isEmpty
-                    ? Icon(Icons.person, size: 20, color: colorScheme.onSurfaceVariant)
-                    : null,
+                child: CircleAvatar(
+                  backgroundImage: review.authorImageUrl.isNotEmpty
+                      ? NetworkImage(review.authorImageUrl)
+                      : null,
+                  radius: 20,
+                  backgroundColor: colorScheme.surfaceContainerHighest,
+                  child: review.authorImageUrl.isEmpty
+                      ? Icon(Icons.person, size: 20, color: colorScheme.onSurfaceVariant)
+                      : null,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      review.authorName,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: colorScheme.onSurface,
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: review.userId.isNotEmpty
+                          ? () => context.push('/users/${review.userId}')
+                          : null,
+                      child: Text(
+                        review.authorName,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSurface,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 2),

@@ -1,4 +1,5 @@
 import 'package:hazaribagh_pulse/models/review_model.dart';
+import 'package:hazaribagh_pulse/models/user_model.dart';
 
 import '../services/supabase_profile_service.dart';
 
@@ -9,6 +10,10 @@ class ProfileRepository {
 
   Future<List<ReviewModel>> getUserReviews(String userId) {
     return _service.getUserReviews(userId);
+  }
+
+  Future<UserModel> getUserProfile(String userId) {
+    return _service.getUserProfile(userId);
   }
 
   Future<void> updateProfile(String userId, Map<String, dynamic> data) {

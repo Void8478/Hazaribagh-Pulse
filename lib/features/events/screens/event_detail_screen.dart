@@ -5,6 +5,7 @@ import '../../comments/widgets/comment_section.dart';
 import '../../listings/widgets/info_chip.dart';
 import '../providers/event_providers.dart';
 import '../../interactions/providers/interaction_providers.dart';
+import '../../profile/widgets/public_profile_link.dart';
 import 'package:go_router/go_router.dart';
 
 class EventDetailScreen extends ConsumerWidget {
@@ -144,9 +145,12 @@ class EventDetailScreen extends ConsumerWidget {
                         style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        'By ${event.organizer}',
-                        style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
+                      PublicProfileLink(
+                        userId: event.userId,
+                        name: event.creator.displayName,
+                        username: event.creator.username,
+                        avatarUrl: event.creator.avatarUrl,
+                        subtitle: event.organizer,
                       ),
                       const SizedBox(height: 24),
                       _buildIconRow(context, Icons.calendar_today, 'Date and Time', '${_formatDate(event.date)}\n${event.time}'),

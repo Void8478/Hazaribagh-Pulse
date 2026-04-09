@@ -10,6 +10,7 @@ import '../../../models/event_model.dart';
 import '../../../models/place_model.dart';
 import '../../events/widgets/event_card.dart';
 import '../providers/home_providers.dart';
+import '../../notifications/widgets/notification_bell_button.dart';
 import '../../posts/widgets/post_card.dart';
 import '../../../models/post_model.dart';
 
@@ -22,9 +23,12 @@ class HomeScreen extends ConsumerWidget {
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: places.length,
+        cacheExtent: 560,
         padding: const EdgeInsets.only(right: 16),
         itemBuilder: (context, index) {
-          return PlaceCard(place: places[index]);
+          return RepaintBoundary(
+            child: PlaceCard(place: places[index]),
+          );
         },
       ),
     );
@@ -36,13 +40,16 @@ class HomeScreen extends ConsumerWidget {
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: events.length,
+        cacheExtent: 560,
         padding: const EdgeInsets.only(left: 16, right: 16),
         itemBuilder: (context, index) {
           return Padding(
             padding: const EdgeInsets.only(right: 16),
             child: SizedBox(
               width: 280,
-              child: EventCard(event: events[index]),
+              child: RepaintBoundary(
+                child: EventCard(event: events[index]),
+              ),
             ),
           );
         },
@@ -56,9 +63,12 @@ class HomeScreen extends ConsumerWidget {
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: posts.length,
+        cacheExtent: 560,
         padding: const EdgeInsets.only(right: 16),
         itemBuilder: (context, index) {
-          return PostCard(post: posts[index]);
+          return RepaintBoundary(
+            child: PostCard(post: posts[index]),
+          );
         },
       ),
     );
@@ -73,13 +83,10 @@ class HomeScreen extends ConsumerWidget {
         itemCount: 3,
         padding: const EdgeInsets.only(left: 16, right: 16),
         itemBuilder: (context, index) {
-          return Container(
-            width: 200,
-            margin: const EdgeInsets.only(right: 12),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(16),
-            ),
+          return _RailSkeletonCard(
+            width: 214,
+            height: 214,
+            color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.32),
           );
         },
       ),
@@ -95,13 +102,10 @@ class HomeScreen extends ConsumerWidget {
         itemCount: 2,
         padding: const EdgeInsets.only(left: 16, right: 16),
         itemBuilder: (context, index) {
-          return Container(
+          return _RailSkeletonCard(
             width: 280,
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(16),
-            ),
+            height: 260,
+            color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.32),
           );
         },
       ),
@@ -117,13 +121,10 @@ class HomeScreen extends ConsumerWidget {
         itemCount: 2,
         padding: const EdgeInsets.only(left: 16, right: 16),
         itemBuilder: (context, index) {
-          return Container(
-            width: 280,
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(18),
-            ),
+          return _RailSkeletonCard(
+            width: 292,
+            height: 228,
+            color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.32),
           );
         },
       ),
@@ -179,39 +180,79 @@ class HomeScreen extends ConsumerWidget {
             icon: const Icon(Icons.add_circle_outline_rounded),
             onPressed: () => showCreateSheet(context),
           ),
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {},
-          ),
+          const NotificationBellButton(),
         ],
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
               padding: const EdgeInsets.all(16),
-              child: TextField(
-                readOnly: true,
+              child: InkWell(
                 onTap: () => context.go('/explore'),
-                decoration: InputDecoration(
-                  hintText: 'Search for cafes, plumbers, events...',
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+                borderRadius: BorderRadius.circular(22),
+                child: Ink(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(22),
+                    gradient: LinearGradient(
+                      colors: [
+                        Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest
+                            .withValues(alpha: 0.6),
+                        Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest
+                            .withValues(alpha: 0.34),
+                      ],
+                    ),
+                    border: Border.all(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .outline
+                          .withValues(alpha: 0.08),
+                    ),
                   ),
-                  filled: true,
-                  fillColor: Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerHighest
-                      .withValues(alpha: 0.6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 16,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.search_rounded,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Search places, posts, and events',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
             const SectionHeader(
               title: 'Community Updates',
+              subtitle: 'Recent stories and updates from people around you.',
             ),
             postsAsync.when(
               loading: () => _buildPostRailLoader(context),
@@ -231,6 +272,7 @@ class HomeScreen extends ConsumerWidget {
             ),
             SectionHeader(
               title: 'Trending Near You',
+              subtitle: 'Places locals are opening, sharing, and saving right now.',
               onSeeAll: () => context.go('/explore'),
             ),
             trendingAsync.when(
@@ -252,6 +294,7 @@ class HomeScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             SectionHeader(
               title: 'Top Rated Services',
+              subtitle: 'Reliable places with strong reviews and repeat trust.',
               onSeeAll: () => context.go('/explore'),
             ),
             topRatedAsync.when(
@@ -273,6 +316,7 @@ class HomeScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             SectionHeader(
               title: 'Upcoming Events',
+              subtitle: 'A quick look at what is happening soon in the city.',
               onSeeAll: () => context.go('/events'),
             ),
             eventsAsync.when(
@@ -294,6 +338,7 @@ class HomeScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             SectionHeader(
               title: 'Hidden Gems',
+              subtitle: 'Quiet favorites worth discovering before everyone else finds them.',
               onSeeAll: () => context.go('/explore'),
             ),
             hiddenGemsAsync.when(
@@ -313,6 +358,38 @@ class HomeScreen extends ConsumerWidget {
                   : _buildHorizontalList(places),
             ),
             const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RailSkeletonCard extends StatelessWidget {
+  const _RailSkeletonCard({
+    required this.width,
+    required this.height,
+    required this.color,
+  });
+
+  final double width;
+  final double height;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      margin: const EdgeInsets.only(right: 14, bottom: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color,
+            color.withValues(alpha: 0.55),
           ],
         ),
       ),

@@ -40,7 +40,7 @@ class _WriteReviewScreenState extends ConsumerState<WriteReviewScreen> {
       setState(() { _isSubmitting = true; });
 
       try {
-        final currentUser = ref.read(authStateChangesProvider).value;
+        final currentUser = ref.read(authProvider).user;
         if (currentUser == null) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please log in to submit a review')));
           setState(() { _isSubmitting = false; });

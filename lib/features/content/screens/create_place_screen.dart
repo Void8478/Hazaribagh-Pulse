@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../providers/content_creation_providers.dart';
-import '../../explore/providers/explore_providers.dart';
 import '../../home/providers/home_providers.dart';
 import '../../listings/providers/listing_providers.dart';
 

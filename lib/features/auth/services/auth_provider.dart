@@ -8,17 +8,56 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/network/supabase_client.dart';
 
 final authStateChangesProvider = StreamProvider<User?>((ref) {
-  return ref
-      .watch(supabaseClientProvider)
-      .auth
-      .onAuthStateChange
-      .map((event) => event.session?.user);
+  final supabase = ref.watch(supabaseClientProvider);
+
+  return Stream<User?>.multi((controller) {
+    User? lastUser = supabase.auth.currentUser;
+    controller.add(lastUser);
+
+    final subscription = supabase.auth.onAuthStateChange.listen((event) {
+      final nextUser = event.session?.user;
+      final didChange =
+          lastUser?.id != nextUser?.id ||
+          lastUser?.emailConfirmedAt != nextUser?.emailConfirmedAt;
+
+      if (didChange) {
+        lastUser = nextUser;
+        controller.add(nextUser);
+      }
+    });
+
+    controller.onCancel = () {
+      subscription.cancel();
+    };
+  });
 });
+
+class StartupMinimumSplashDurationNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void reset() {
+    state = false;
+  }
+
+  void complete() {
+    state = true;
+  }
+}
+
+final startupMinimumSplashDurationProvider =
+    NotifierProvider<StartupMinimumSplashDurationNotifier, bool>(
+  StartupMinimumSplashDurationNotifier.new,
+);
 
 class AuthState {
   final bool isLoading;
   final bool isInitializing;
+  final bool isAuthenticated;
+  final User? user;
+  final Map<String, dynamic>? profile;
   final String? error;
+  final String? initializationError;
   final bool needsProfileCompletion;
   final bool emailVerificationPending;
   final String? pendingEmail;
@@ -27,7 +66,11 @@ class AuthState {
   const AuthState({
     this.isLoading = false,
     this.isInitializing = false,
+    this.isAuthenticated = false,
+    this.user,
+    this.profile,
     this.error,
+    this.initializationError,
     this.needsProfileCompletion = false,
     this.emailVerificationPending = false,
     this.pendingEmail,
@@ -37,8 +80,14 @@ class AuthState {
   AuthState copyWith({
     bool? isLoading,
     bool? isInitializing,
+    bool? isAuthenticated,
+    User? user,
+    Map<String, dynamic>? profile,
     String? error,
+    String? initializationError,
     bool clearError = false,
+    bool clearInitializationError = false,
+    bool clearProfile = false,
     bool? needsProfileCompletion,
     bool? emailVerificationPending,
     String? pendingEmail,
@@ -47,7 +96,13 @@ class AuthState {
     return AuthState(
       isLoading: isLoading ?? this.isLoading,
       isInitializing: isInitializing ?? this.isInitializing,
+      isAuthenticated: isAuthenticated ?? this.isAuthenticated,
+      user: user ?? this.user,
+      profile: clearProfile ? null : (profile ?? this.profile),
       error: clearError ? null : (error ?? this.error),
+      initializationError: clearInitializationError
+          ? null
+          : (initializationError ?? this.initializationError),
       needsProfileCompletion:
           needsProfileCompletion ?? this.needsProfileCompletion,
       emailVerificationPending:
@@ -59,8 +114,17 @@ class AuthState {
 }
 
 class AuthNotifier extends Notifier<AuthState> {
-  late final SupabaseClient _supabase;
-  late final GoogleSignIn _googleSignIn;
+  final SupabaseClient _supabase = Supabase.instance.client;
+  StreamSubscription<dynamic>? _authStateSubscription;
+  Future<void>? _initializationFuture;
+  Future<void>? _activeResolutionFuture;
+  String? _activeResolutionUserId;
+  String? _profileCheckUserId;
+  bool _startupRetriedOnce = false;
+  int _bootstrapRunId = 0;
+  bool _startupRequested = false;
+
+  static const Duration _bootstrapTimeout = Duration(seconds: 8);
 
   static const Set<String> _profileColumns = {
     'id',
@@ -75,38 +139,184 @@ class AuthNotifier extends Notifier<AuthState> {
 
   @override
   AuthState build() {
-    _supabase = ref.watch(supabaseClientProvider);
-    _googleSignIn = GoogleSignIn();
-    _initializeWithAuthStream();
+    _logStep('bootstrap listener attached');
+    _authStateSubscription ??= _supabase.auth.onAuthStateChange.listen((
+      authState,
+    ) {
+      final event = authState.event;
+      final session = authState.session;
+      _logStep(
+        'auth transition: $event, hasSession=${session != null}, userId=${session?.user.id}',
+      );
+
+      if (event == AuthChangeEvent.signedOut || session?.user == null) {
+        _profileCheckUserId = null;
+        _activeResolutionFuture = null;
+        _activeResolutionUserId = null;
+        _logStep('navigating to login: signed out');
+        _logStep('loading finished: signed out');
+        state = const AuthState();
+        return;
+      }
+
+      if (event == AuthChangeEvent.signedIn ||
+          event == AuthChangeEvent.userUpdated ||
+          event == AuthChangeEvent.initialSession) {
+        unawaited(_resolveSession(session, isStartup: false));
+      }
+    });
+
+    ref.onDispose(() {
+      _authStateSubscription?.cancel();
+    });
+
+    _logStep('waiting for startup trigger');
     return const AuthState(isInitializing: true);
   }
 
-  Future<void> _initializeWithAuthStream() async {
-    try {
-      final event = await _supabase.auth.onAuthStateChange.first.timeout(
-        const Duration(seconds: 8),
-        onTimeout: () => throw TimeoutException('Auth stream timed out'),
-      );
+  Future<void> startBootstrapIfNeeded() {
+    _logStep('startup triggered');
+    _startupRequested = true;
+    return _initializeAuthState();
+  }
 
-      final user = event.session?.user;
-      if (user == null) {
-        state = state.copyWith(isInitializing: false);
-        return;
-      }
-
-      if (!_isEmailConfirmed(user)) {
-        state = state.copyWith(
-          isInitializing: false,
-          emailVerificationPending: true,
-          pendingEmail: user.email,
-        );
-        return;
-      }
-
-      await _verifyUserProfile(user, isStartup: true);
-    } catch (_) {
-      state = state.copyWith(isInitializing: false);
+  Future<void> _initializeAuthState({bool force = false}) async {
+    if (!force && _initializationFuture != null) {
+      _logStep('bootstrap already running, joining existing future');
+      return _initializationFuture!;
     }
+
+    if (!force && !_startupRequested) {
+      _logStep('bootstrap skipped until startup trigger');
+      return;
+    }
+
+    _startupRetriedOnce = false;
+    final runId = ++_bootstrapRunId;
+    _logStep('startup began [run=$runId]');
+    final future = _runBootstrap(runId);
+    _initializationFuture = future;
+
+    try {
+      await future;
+    } finally {
+      if (identical(_initializationFuture, future)) {
+        _initializationFuture = null;
+      }
+    }
+  }
+
+  Future<void> _runBootstrap(int runId) async {
+    try {
+      await _performBootstrap(runId).timeout(
+        _bootstrapTimeout,
+        onTimeout: () async {
+          _logStep('bootstrap timeout [run=$runId]');
+          throw TimeoutException('Bootstrap timed out');
+        },
+      );
+    } on TimeoutException catch (e) {
+      _logStep('bootstrap error [run=$runId]: $e');
+      final user = _supabase.auth.currentUser;
+      state = state.copyWith(
+        isInitializing: false,
+        isLoading: false,
+        isAuthenticated: user != null,
+        user: user,
+        initializationError:
+            'Startup took too long. Please retry once your connection is stable.',
+      );
+      _logStep('loading finished: bootstrap timeout fallback');
+    } catch (e) {
+      _logStep('bootstrap error [run=$runId]: $e');
+      final user = _supabase.auth.currentUser;
+      state = state.copyWith(
+        isInitializing: false,
+        isLoading: false,
+        isAuthenticated: user != null,
+        user: user,
+        initializationError:
+            'We could not finish starting the app. Please try again.',
+      );
+      _logStep('loading finished: bootstrap error fallback');
+    }
+  }
+
+  Future<void> _performBootstrap(int runId) async {
+    final session = _supabase.auth.currentSession;
+    final user = session?.user;
+
+    if (user == null) {
+      _logStep('no session found [run=$runId], navigating to login');
+      _logStep('loading finished: no session');
+      state = const AuthState();
+      return;
+    }
+
+    _logStep('session found [run=$runId], userId=${user.id}');
+    await _resolveSession(session, isStartup: true);
+  }
+
+  Future<void> _resolveSession(Session? session, {required bool isStartup}) async {
+    final user = session?.user;
+
+    if (user == null) {
+      _logStep('resolve session: no session, navigating to login');
+      state = const AuthState();
+      return;
+    }
+
+    if (_activeResolutionUserId == user.id && _activeResolutionFuture != null) {
+      _logStep('resolve session skipped, already resolving userId=${user.id}');
+      return _activeResolutionFuture!;
+    }
+
+    final future = _resolveSessionInternal(user, isStartup: isStartup);
+    _activeResolutionUserId = user.id;
+    _activeResolutionFuture = future;
+
+    try {
+      await future;
+    } finally {
+      if (identical(_activeResolutionFuture, future)) {
+        _activeResolutionFuture = null;
+        _activeResolutionUserId = null;
+      }
+    }
+  }
+
+  Future<void> _resolveSessionInternal(
+    User user, {
+    required bool isStartup,
+  }) async {
+    _logStep(
+      '${isStartup ? 'startup' : 'transition'} resolve session for userId=${user.id}',
+    );
+    state = state.copyWith(
+      isInitializing: isStartup,
+      isLoading: !isStartup,
+      isAuthenticated: true,
+      user: user,
+      clearError: true,
+      clearInitializationError: true,
+      emailVerificationPending: false,
+      pendingEmail: user.email,
+      readyForApp: false,
+    );
+
+    if (!_isEmailConfirmed(user)) {
+      _logStep('email not verified for userId=${user.id}');
+      state = state.copyWith(
+        isInitializing: false,
+        isLoading: false,
+        isAuthenticated: false,
+        emailVerificationPending: true,
+        pendingEmail: user.email,
+      );
+      return;
+    }
+
+    await _verifyUserProfile(user, isStartup: isStartup);
   }
 
   bool _isEmailConfirmed(User user) => user.emailConfirmedAt != null;
@@ -192,6 +402,7 @@ class AuthNotifier extends Notifier<AuthState> {
     String? avatarUrl,
     String? location,
   }) async {
+    _logStep('fetching profile for userId=${user.id}');
     final existing = await _supabase
         .from('profiles')
         .select()
@@ -201,6 +412,7 @@ class AuthNotifier extends Notifier<AuthState> {
     final now = DateTime.now().toIso8601String();
 
     if (existing == null) {
+      _logStep('profile missing for userId=${user.id}, creating profile');
       final created = await _supabase
           .from('profiles')
           .insert(
@@ -218,8 +430,11 @@ class AuthNotifier extends Notifier<AuthState> {
           )
           .select()
           .single();
+      _logStep('profile created for userId=${user.id}');
       return Map<String, dynamic>.from(created);
     }
+
+    _logStep('profile found for userId=${user.id}');
 
     final updateData = <String, dynamic>{};
 
@@ -266,6 +481,7 @@ class AuthNotifier extends Notifier<AuthState> {
     );
 
     if (updateData.isNotEmpty) {
+      _logStep('profile patching missing fields for userId=${user.id}');
       updateData['updated_at'] = now;
       final updated = await _supabase
           .from('profiles')
@@ -279,30 +495,81 @@ class AuthNotifier extends Notifier<AuthState> {
     return Map<String, dynamic>.from(existing);
   }
 
-  Future<void> _verifyUserProfile(User user, {bool isStartup = false}) async {
+  Future<void> _verifyUserProfile(
+    User user, {
+    bool isStartup = false,
+    int attempt = 0,
+  }) async {
+    if (_profileCheckUserId == user.id) {
+      return;
+    }
+
+    _profileCheckUserId = user.id;
+
     try {
-      await _ensureProfileRow(user).timeout(
-        const Duration(seconds: 6),
+      final profile = await _ensureProfileRow(user).timeout(
+        const Duration(seconds: 7),
         onTimeout: () => throw TimeoutException('Profile fetch timed out'),
+      );
+      _logStep('profile ready for userId=${user.id}, navigating to home');
+
+      state = state.copyWith(
+        isInitializing: false,
+        isLoading: false,
+        isAuthenticated: true,
+        user: user,
+        profile: profile,
+        clearInitializationError: true,
+        needsProfileCompletion: false,
+        emailVerificationPending: false,
+        pendingEmail: user.email,
+        readyForApp: false,
+      );
+      _startupRetriedOnce = false;
+      _logStep('loading finished: startup success');
+    } catch (e) {
+      _logStep('profile bootstrap error for userId=${user.id}: $e');
+
+      if (isStartup && !_startupRetriedOnce && attempt == 0) {
+        _startupRetriedOnce = true;
+        _logStep('bootstrap retrying profile fetch once for userId=${user.id}');
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+        if (_profileCheckUserId == user.id) {
+          _profileCheckUserId = null;
+        }
+        return _verifyUserProfile(user, isStartup: true, attempt: 1);
+      }
+
+      final fallbackProfile = _buildProfileWriteData(
+        user: user,
+        now: DateTime.now().toIso8601String(),
+        includeId: true,
+        includeCreatedAt: true,
       );
 
       state = state.copyWith(
-        isInitializing: isStartup ? false : state.isInitializing,
-        isLoading: isStartup ? state.isLoading : false,
-        needsProfileCompletion: false,
-        readyForApp: true,
+        isInitializing: false,
+        isLoading: false,
+        isAuthenticated: true,
+        user: user,
+        profile: fallbackProfile,
+        clearInitializationError: true,
+        readyForApp: false,
       );
-    } catch (e) {
-      debugPrint('Profile check failed: $e');
-      state = state.copyWith(
-        isInitializing: isStartup ? false : state.isInitializing,
-        isLoading: isStartup ? state.isLoading : false,
-        readyForApp: true,
-      );
+      _logStep('loading finished: profile bootstrap fallback with local profile');
+    } finally {
+      if (_profileCheckUserId == user.id) {
+        _profileCheckUserId = null;
+      }
     }
   }
 
+  void _logStep(String message) {
+    debugPrint('[AuthBootstrap] $message');
+  }
+
   Future<void> signInWithGoogle() async {
+    ref.read(startupMinimumSplashDurationProvider.notifier).reset();
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       if (kIsWeb) {
@@ -310,7 +577,8 @@ class AuthNotifier extends Notifier<AuthState> {
         return;
       }
 
-      final googleUser = await _googleSignIn.signIn();
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      final googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
         state = state.copyWith(isLoading: false);
         return;
@@ -393,7 +661,7 @@ class AuthNotifier extends Notifier<AuthState> {
       state = state.copyWith(
         isLoading: false,
         needsProfileCompletion: false,
-        readyForApp: true,
+        readyForApp: false,
       );
     } catch (e) {
       state = state.copyWith(
@@ -404,6 +672,7 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   Future<void> signInWithEmail(String email, String password) async {
+    ref.read(startupMinimumSplashDurationProvider.notifier).reset();
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final res = await _supabase.auth.signInWithPassword(
@@ -421,12 +690,13 @@ class AuthNotifier extends Notifier<AuthState> {
       }
 
       if (!_isEmailConfirmed(user)) {
-        state = state.copyWith(
-          isLoading: false,
-          emailVerificationPending: true,
-          pendingEmail: email,
-        );
-        return;
+      state = state.copyWith(
+        isLoading: false,
+        emailVerificationPending: true,
+        isAuthenticated: false,
+        pendingEmail: email,
+      );
+      return;
       }
 
       await _verifyUserProfile(user);
@@ -446,6 +716,7 @@ class AuthNotifier extends Notifier<AuthState> {
     String phoneNumber,
     String password,
   ) async {
+    ref.read(startupMinimumSplashDurationProvider.notifier).reset();
     state = state.copyWith(
       isLoading: true,
       clearError: true,
@@ -479,12 +750,13 @@ class AuthNotifier extends Notifier<AuthState> {
       }
 
       if (res.session == null) {
-        state = state.copyWith(
-          isLoading: false,
-          emailVerificationPending: true,
-          pendingEmail: email,
-        );
-        return;
+      state = state.copyWith(
+        isLoading: false,
+        emailVerificationPending: true,
+        isAuthenticated: false,
+        pendingEmail: email,
+      );
+      return;
       }
 
       if (res.user != null) {
@@ -555,6 +827,12 @@ class AuthNotifier extends Notifier<AuthState> {
     state = state.copyWith(readyForApp: false);
   }
 
+  Future<void> retryInitialization() {
+    _logStep('retry function called');
+    _startupRequested = true;
+    return _initializeAuthState(force: true);
+  }
+
   Future<void> resetPassword(String email) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
@@ -577,7 +855,6 @@ class AuthNotifier extends Notifier<AuthState> {
   Future<void> signOut() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      if (!kIsWeb) await _googleSignIn.signOut();
       await _supabase.auth.signOut();
       state = const AuthState();
     } catch (e) {
@@ -588,26 +865,44 @@ class AuthNotifier extends Notifier<AuthState> {
     }
   }
 
-  Future<void> deleteAccount() async {
+  Future<bool> deleteAccount() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null) throw Exception('No user is currently signed in.');
+      if (user == null) {
+        throw Exception('No user is currently signed in.');
+      }
 
-      final uid = user.id;
+      _logStep('delete account requested for userId=${user.id}');
+      await _supabase.functions.invoke('delete-account');
+      _logStep('delete account edge function succeeded for userId=${user.id}');
 
-      await _supabase.from('profiles').delete().eq('id', uid);
+      try {
+        await _supabase.auth.signOut();
+      } catch (signOutError) {
+        _logStep(
+          'local sign out after account deletion returned: $signOutError',
+        );
+      }
 
-      await _supabase.auth.signOut();
-      if (!kIsWeb) await _googleSignIn.signOut();
-
+      _logStep('navigating to login: account permanently deleted');
       state = const AuthState();
+      return true;
+    } on FunctionException catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.details?.toString().trim().isNotEmpty == true
+            ? e.details.toString()
+            : 'Failed to permanently delete your account.',
+      );
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: 'An unexpected error occurred: $e',
+        error: 'Failed to permanently delete your account: $e',
       );
     }
+
+    return false;
   }
 }
 

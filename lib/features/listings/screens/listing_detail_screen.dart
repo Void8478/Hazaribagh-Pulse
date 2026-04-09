@@ -8,6 +8,7 @@ import '../widgets/info_chip.dart';
 import '../../listings/providers/listing_providers.dart';
 import '../../reviews/providers/review_providers.dart';
 import '../../interactions/providers/interaction_providers.dart';
+import '../../profile/widgets/public_profile_link.dart';
 
 class ListingDetailScreen extends ConsumerWidget {
   final String listingId;
@@ -189,6 +190,14 @@ class ListingDetailScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 8),
+                      PublicProfileLink(
+                        userId: place.userId,
+                        name: place.creator.displayName,
+                        username: place.creator.username,
+                        avatarUrl: place.creator.avatarUrl,
+                        subtitle: 'Added by local creator',
+                      ),
+                      const SizedBox(height: 12),
 
                       // Rating Summary
                       RatingSummaryWidget(rating: place.rating, reviewCount: place.reviewCount),
