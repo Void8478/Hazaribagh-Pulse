@@ -54,6 +54,8 @@ class AuthState {
   final bool isLoading;
   final bool isInitializing;
   final bool isAuthenticated;
+  final bool isSigningOut;
+  final bool isDeletingAccount;
   final User? user;
   final Map<String, dynamic>? profile;
   final String? error;
@@ -67,6 +69,8 @@ class AuthState {
     this.isLoading = false,
     this.isInitializing = false,
     this.isAuthenticated = false,
+    this.isSigningOut = false,
+    this.isDeletingAccount = false,
     this.user,
     this.profile,
     this.error,
@@ -81,6 +85,8 @@ class AuthState {
     bool? isLoading,
     bool? isInitializing,
     bool? isAuthenticated,
+    bool? isSigningOut,
+    bool? isDeletingAccount,
     User? user,
     Map<String, dynamic>? profile,
     String? error,
@@ -97,6 +103,8 @@ class AuthState {
       isLoading: isLoading ?? this.isLoading,
       isInitializing: isInitializing ?? this.isInitializing,
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
+      isSigningOut: isSigningOut ?? this.isSigningOut,
+      isDeletingAccount: isDeletingAccount ?? this.isDeletingAccount,
       user: user ?? this.user,
       profile: clearProfile ? null : (profile ?? this.profile),
       error: clearError ? null : (error ?? this.error),
@@ -125,6 +133,8 @@ class AuthNotifier extends Notifier<AuthState> {
   bool _startupRequested = false;
 
   static const Duration _bootstrapTimeout = Duration(seconds: 8);
+  static const Duration _signOutTimeout = Duration(seconds: 10);
+  static const Duration _deleteTimeout = Duration(seconds: 15);
 
   static const Set<String> _profileColumns = {
     'id',
@@ -150,12 +160,9 @@ class AuthNotifier extends Notifier<AuthState> {
       );
 
       if (event == AuthChangeEvent.signedOut || session?.user == null) {
-        _profileCheckUserId = null;
-        _activeResolutionFuture = null;
-        _activeResolutionUserId = null;
         _logStep('navigating to login: signed out');
         _logStep('loading finished: signed out');
-        state = const AuthState();
+        _resetToSignedOutState();
         return;
       }
 
@@ -172,6 +179,86 @@ class AuthNotifier extends Notifier<AuthState> {
 
     _logStep('waiting for startup trigger');
     return const AuthState(isInitializing: true);
+  }
+
+  void _resetToSignedOutState() {
+    _profileCheckUserId = null;
+    _activeResolutionFuture = null;
+    _activeResolutionUserId = null;
+    state = const AuthState();
+  }
+
+  bool _isSessionExpiredMessage(String message) {
+    final lower = message.toLowerCase();
+    return lower.contains('session expired') ||
+        lower.contains('log in again') ||
+        lower.contains('login again');
+  }
+
+  bool get _hasLocalSession =>
+      _supabase.auth.currentSession != null || _supabase.auth.currentUser != null;
+
+  String _stringifyError(Object? value) {
+    if (value == null) return '';
+    if (value is Map<String, dynamic>) {
+      for (final key in const ['message', 'error', 'details', 'description']) {
+        final candidate = value[key]?.toString().trim() ?? '';
+        if (candidate.isNotEmpty) {
+          return candidate;
+        }
+      }
+    }
+    return value.toString().trim();
+  }
+
+  String _friendlyMessage(
+    Object error, {
+    required String fallback,
+  }) {
+    final raw = error is AuthException
+        ? error.message
+        : error is FunctionException
+            ? _stringifyError(error.details).isNotEmpty
+                  ? _stringifyError(error.details)
+                  : _stringifyError(error.reasonPhrase)
+            : _stringifyError(error);
+
+    final normalized = raw.trim();
+    if (normalized.isEmpty) {
+      return fallback;
+    }
+
+    final lower = normalized.toLowerCase();
+    if (lower.contains('socketexception') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('network is unreachable') ||
+        lower.contains('connection closed') ||
+        lower.contains('timed out') ||
+        lower.contains('timeout') ||
+        lower.contains('clientexception')) {
+      return 'No internet connection. Please reconnect and try again.';
+    }
+
+    if (lower.contains('invalid jwt') ||
+        lower.contains('jwt expired') ||
+        lower.contains('refresh token') ||
+        lower.contains('session') && lower.contains('expired')) {
+      return 'Your session expired. Please log in again.';
+    }
+
+    if (lower.contains('user not found') ||
+        lower.contains('unauthorized user') ||
+        lower.contains('missing authorization header')) {
+      return 'Your session expired. Please log in again.';
+    }
+
+    if (lower.contains('duplicate key') ||
+        lower.contains('profiles_username_key') ||
+        lower.contains('already exists')) {
+      return 'That username is already taken. Please choose a different one.';
+    }
+
+    return normalized;
   }
 
   Future<void> startBootstrapIfNeeded() {
@@ -296,6 +383,8 @@ class AuthNotifier extends Notifier<AuthState> {
       isInitializing: isStartup,
       isLoading: !isStartup,
       isAuthenticated: true,
+      isSigningOut: false,
+      isDeletingAccount: false,
       user: user,
       clearError: true,
       clearInitializationError: true,
@@ -310,6 +399,8 @@ class AuthNotifier extends Notifier<AuthState> {
         isInitializing: false,
         isLoading: false,
         isAuthenticated: false,
+        isSigningOut: false,
+        isDeletingAccount: false,
         emailVerificationPending: true,
         pendingEmail: user.email,
       );
@@ -517,6 +608,8 @@ class AuthNotifier extends Notifier<AuthState> {
         isInitializing: false,
         isLoading: false,
         isAuthenticated: true,
+        isSigningOut: false,
+        isDeletingAccount: false,
         user: user,
         profile: profile,
         clearInitializationError: true,
@@ -551,6 +644,8 @@ class AuthNotifier extends Notifier<AuthState> {
         isInitializing: false,
         isLoading: false,
         isAuthenticated: true,
+        isSigningOut: false,
+        isDeletingAccount: false,
         user: user,
         profile: fallbackProfile,
         clearInitializationError: true,
@@ -853,28 +948,73 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   Future<void> signOut() async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    if (state.isSigningOut) {
+      return;
+    }
+
+    state = state.copyWith(
+      isLoading: true,
+      isSigningOut: true,
+      isDeletingAccount: false,
+      clearError: true,
+    );
     try {
-      await _supabase.auth.signOut();
-      state = const AuthState();
+      await _supabase.auth.signOut().timeout(_signOutTimeout);
+      _resetToSignedOutState();
     } catch (e) {
+      final message = _friendlyMessage(
+        e,
+        fallback: 'We could not log you out right now. Please try again.',
+      );
+
+      if (!_hasLocalSession) {
+        _resetToSignedOutState();
+        return;
+      }
+
+      if (_isSessionExpiredMessage(message)) {
+        state = AuthState(error: message);
+        return;
+      }
+
       state = state.copyWith(
         isLoading: false,
-        error: 'Sign out failed: $e',
+        isSigningOut: false,
+        error: message,
       );
     }
   }
 
   Future<bool> deleteAccount() async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    if (state.isDeletingAccount) {
+      return false;
+    }
+
+    state = state.copyWith(
+      isLoading: true,
+      isSigningOut: false,
+      isDeletingAccount: true,
+      clearError: true,
+    );
     try {
       final user = _supabase.auth.currentUser;
+      final session = _supabase.auth.currentSession;
       if (user == null) {
         throw Exception('No user is currently signed in.');
       }
+      if (session == null) {
+        throw Exception('Your session expired. Please log in again.');
+      }
 
       _logStep('delete account requested for userId=${user.id}');
-      await _supabase.functions.invoke('delete-account');
+      await _supabase.functions
+          .invoke(
+            'delete-account',
+            headers: {
+              'Authorization': 'Bearer ${session.accessToken}',
+            },
+          )
+          .timeout(_deleteTimeout);
       _logStep('delete account edge function succeeded for userId=${user.id}');
 
       try {
@@ -886,19 +1026,43 @@ class AuthNotifier extends Notifier<AuthState> {
       }
 
       _logStep('navigating to login: account permanently deleted');
-      state = const AuthState();
+      _resetToSignedOutState();
       return true;
     } on FunctionException catch (e) {
+      final message = _friendlyMessage(
+        e,
+        fallback: 'Failed to permanently delete your account.',
+      );
+      if (_isSessionExpiredMessage(message)) {
+        state = AuthState(error: message);
+        return false;
+      }
+
       state = state.copyWith(
         isLoading: false,
-        error: e.details?.toString().trim().isNotEmpty == true
-            ? e.details.toString()
-            : 'Failed to permanently delete your account.',
+        isDeletingAccount: false,
+        error: message,
       );
     } catch (e) {
+      final message = _friendlyMessage(
+        e,
+        fallback: 'Failed to permanently delete your account.',
+      );
+
+      if (!_hasLocalSession) {
+        _resetToSignedOutState();
+        return true;
+      }
+
+      if (_isSessionExpiredMessage(message)) {
+        state = AuthState(error: message);
+        return false;
+      }
+
       state = state.copyWith(
         isLoading: false,
-        error: 'Failed to permanently delete your account: $e',
+        isDeletingAccount: false,
+        error: message,
       );
     }
 

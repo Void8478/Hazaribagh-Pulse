@@ -2,6 +2,54 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hazaribagh_pulse/models/review_model.dart';
 import 'package:hazaribagh_pulse/models/user_model.dart';
 
+String formatProfileServiceError(
+  Object error, {
+  required String fallbackMessage,
+}) {
+  String details = '';
+
+  if (error is AuthException) {
+    details = error.message.trim();
+  } else if (error is PostgrestException) {
+    details = error.message.trim();
+  } else if (error is StorageException) {
+    details = error.message.trim();
+  } else {
+    details = error.toString().trim();
+  }
+
+  if (details.startsWith('Exception: ')) {
+    details = details.substring('Exception: '.length).trim();
+  }
+
+  if (details.isEmpty) {
+    return fallbackMessage;
+  }
+
+  final lower = details.toLowerCase();
+  if (lower.contains('socketexception') ||
+      lower.contains('failed host lookup') ||
+      lower.contains('network is unreachable') ||
+      lower.contains('connection closed') ||
+      lower.contains('clientexception') ||
+      lower.contains('timeout') ||
+      lower.contains('timed out')) {
+    return 'No internet connection. Please reconnect and try again.';
+  }
+
+  if (lower.contains('duplicate key') ||
+      lower.contains('profiles_username_key') ||
+      lower.contains('already exists')) {
+    return 'That username is already taken. Please choose a different one.';
+  }
+
+  if (lower.contains('jwt') || lower.contains('session expired')) {
+    return 'Your session expired. Please log in again.';
+  }
+
+  return details;
+}
+
 class SupabaseProfileService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -205,7 +253,12 @@ class SupabaseProfileService {
         email: currentUser?.id == userId ? currentUser?.email ?? '' : '',
       );
     } catch (e) {
-      throw Exception('Failed to fetch user profile: $e');
+      throw Exception(
+        formatProfileServiceError(
+          e,
+          fallbackMessage: 'Failed to load your profile.',
+        ),
+      );
     }
   }
 
@@ -220,7 +273,12 @@ class SupabaseProfileService {
           .map((data) => ReviewModel.fromJson(Map<String, dynamic>.from(data as Map)))
           .toList();
     } catch (e) {
-      throw Exception('Failed to fetch user reviews: $e');
+      throw Exception(
+        formatProfileServiceError(
+          e,
+          fallbackMessage: 'Failed to load your reviews.',
+        ),
+      );
     }
   }
 
@@ -244,7 +302,12 @@ class SupabaseProfileService {
 
       await _supabase.from('profiles').update(updateData).eq('id', userId);
     } catch (e) {
-      throw Exception('Failed to update profile: $e');
+      throw Exception(
+        formatProfileServiceError(
+          e,
+          fallbackMessage: 'Failed to save your profile changes.',
+        ),
+      );
     }
   }
 
@@ -252,7 +315,12 @@ class SupabaseProfileService {
     try {
       await _supabase.rpc('delete_user_account');
     } catch (e) {
-      throw Exception('Failed to delete user data: $e');
+      throw Exception(
+        formatProfileServiceError(
+          e,
+          fallbackMessage: 'Failed to delete your account data.',
+        ),
+      );
     }
   }
 }
