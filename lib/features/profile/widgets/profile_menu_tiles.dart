@@ -6,17 +6,21 @@ import '../../../../core/theme/theme_provider.dart';
 class ProfileMenuTiles extends ConsumerWidget {
   final VoidCallback onLogout;
   final VoidCallback onDeleteAccount;
+  final VoidCallback? onOpenAdminPanel;
   final bool isLoggingOut;
   final bool isDeletingAccount;
   final bool actionsDisabled;
+  final bool showAdminPanel;
 
   const ProfileMenuTiles({
     super.key,
     required this.onLogout,
     required this.onDeleteAccount,
+    this.onOpenAdminPanel,
     this.isLoggingOut = false,
     this.isDeletingAccount = false,
     this.actionsDisabled = false,
+    this.showAdminPanel = false,
   });
 
   @override
@@ -95,6 +99,16 @@ class ProfileMenuTiles extends ConsumerWidget {
                   () => context.push('/privacy'),
                   enabled: !actionsDisabled,
                 ),
+                if (showAdminPanel && onOpenAdminPanel != null) ...[
+                  _buildDivider(context),
+                  _buildTile(
+                    context,
+                    Icons.admin_panel_settings_outlined,
+                    'Admin Panel',
+                    onOpenAdminPanel!,
+                    enabled: !actionsDisabled,
+                  ),
+                ],
               ],
             ),
           ),

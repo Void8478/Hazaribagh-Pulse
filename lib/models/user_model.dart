@@ -5,6 +5,7 @@ class UserModel {
   final String bio;
   final String location;
   final String email;
+  final bool isAdmin;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String avatarUrl;
@@ -22,6 +23,7 @@ class UserModel {
     required this.bio,
     required this.location,
     required this.email,
+    this.isAdmin = false,
     this.createdAt,
     this.updatedAt,
     required this.avatarUrl,
@@ -44,6 +46,7 @@ class UserModel {
       bio: data['bio']?.toString() ?? '',
       location: data['location']?.toString() ?? '',
       email: email,
+      isAdmin: data['is_admin'] == true || data['isAdmin'] == true,
       createdAt: data['created_at'] != null
           ? DateTime.tryParse(data['created_at'].toString())
           : null,

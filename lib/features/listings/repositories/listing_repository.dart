@@ -11,16 +11,19 @@ class ListingRepository {
     return _service.getAllListings();
   }
 
-  Future<List<PlaceModel>> fetchTrendingListings({int limit = 8}) {
-    return _service.getTrendingListings(limit: limit);
+  Future<List<PlaceModel>> fetchFeaturedListings({int limit = 8}) {
+    return _service.getFeaturedListings(limit: limit);
   }
 
-  Future<List<PlaceModel>> fetchTopRatedListings({int limit = 8}) {
-    return _service.getTopRatedListings(limit: limit);
+  Future<List<PlaceModel>> fetchRankedListings({int limit = 8}) {
+    return _service.getRankedListings(limit: limit);
   }
 
-  Future<List<PlaceModel>> fetchHiddenGemListings({int limit = 8}) {
-    return _service.getHiddenGemListings(limit: limit);
+  Future<List<PlaceModel>> fetchCategoryListings(
+    String categoryId, {
+    int? limit,
+  }) {
+    return _service.getCategoryListings(categoryId, limit: limit);
   }
 
   Future<List<CategoryModel>> fetchAllCategories() {

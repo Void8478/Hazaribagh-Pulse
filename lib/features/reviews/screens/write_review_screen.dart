@@ -68,9 +68,9 @@ class _WriteReviewScreenState extends ConsumerState<WriteReviewScreen> {
         ref.invalidate(listingReviewsProvider(widget.listingId));
         ref.invalidate(listingDetailProvider(widget.listingId));
         ref.invalidate(allListingsProvider);
-        ref.invalidate(homeTrendingListingsProvider);
-        ref.invalidate(homeTopRatedListingsProvider);
-        ref.invalidate(homeHiddenGemListingsProvider);
+        ref.invalidate(homeFeaturedListingsProvider);
+        ref.invalidate(homeRankedListingsProvider);
+        ref.invalidate(homeCategorySectionsProvider);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

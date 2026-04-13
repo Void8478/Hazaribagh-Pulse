@@ -14,7 +14,7 @@ final eventRepositoryProvider = Provider<EventRepository>((ref) {
 
 final allEventsProvider = FutureProvider<List<EventModel>>((ref) async {
   final repository = ref.watch(eventRepositoryProvider);
-  return repository.fetchUpcomingEvents();
+  return repository.fetchAllActiveEvents();
 });
 
 final categoryEventsProvider = FutureProvider.family<List<EventModel>, String>((ref, category) async {

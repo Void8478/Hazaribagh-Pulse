@@ -27,8 +27,8 @@ class PostDetailScreen extends ConsumerWidget {
     
     final userLikes = ref.watch(userLikesProvider).value ?? {};
     final userBookmarks = ref.watch(userBookmarksProvider).value ?? {};
-    final isLiked = userLikes.contains(postId);
-    final isBookmarked = userBookmarks.contains(postId);
+    final isLiked = userLikes.contains(interactionKey('post', postId));
+    final isBookmarked = userBookmarks.contains(interactionKey('post', postId));
     
     final likeCountAsync = ref.watch(itemLikeCountProvider('post:$postId'));
     final likeCount = likeCountAsync.value ?? 0;

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/content_display.dart';
 import '../../../core/widgets/create_bottom_sheet.dart';
 import '../../../core/widgets/premium_empty_state.dart';
 import '../../listings/providers/listing_providers.dart';
@@ -279,25 +280,33 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
         selectedType == ExploreContentType.places) {
       if (results.places.isNotEmpty) {
         widgets.add(
-          _ResultsSection(
+                  _ResultsSection(
             title: 'Places',
             children: results.places.map((place) {
+              final placeMeta = joinNonEmpty([
+                place.categoryLabel,
+                place.locationLabel,
+              ], separator: ' • ');
+
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: GlobalSearchResultTile(
                   title: place.name,
-                  subtitle: place.description,
-                  meta: place.category,
+                  subtitle: place.descriptionLabel,
+                  meta: placeMeta,
                   route: '/listing/${place.id}',
                   icon: Icons.storefront_rounded,
                   accentColor: colorScheme.primary,
-                  imageUrl: place.imageUrl,
+                  imageUrl: place.primaryImageUrl,
                   badges: [
+                    if (place.isFeatured) 'Featured',
                     if (place.isVerified) 'Verified',
                     if (place.isSponsored) 'Sponsored',
                   ],
                   trailing: Text(
-                    '${place.rating.toStringAsFixed(1)} - ${results.likeCountFor('place', place.id)} likes',
+                    place.hasRating
+                        ? '${place.rating.toStringAsFixed(1)} • ${place.reviewCount} reviews'
+                        : '${results.likeCountFor('place', place.id)} likes',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 11,
@@ -354,22 +363,31 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
           _ResultsSection(
             title: 'Events',
             children: results.events.map((event) {
+              final eventMeta = joinNonEmpty([
+                event.categoryLabel,
+                formatMediumDate(event.startDateOrNull),
+              ], separator: ' • ');
+
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: GlobalSearchResultTile(
                   title: event.title,
-                  subtitle: event.description,
-                  meta: event.category.isNotEmpty ? event.category : 'Event',
+                  subtitle: event.descriptionLabel,
+                  meta: eventMeta,
                   route: '/event/${event.id}',
                   icon: Icons.event_rounded,
                   accentColor: Colors.orange,
                   imageUrl: event.imageUrl,
                   badges: [
-                    if (event.date.isAfter(DateTime.now())) 'Upcoming',
+                    if (event.isFeatured) 'Featured',
+                    if (event.isUpcoming) 'Upcoming',
                     if (event.isFree) 'Free',
                   ],
                   trailing: Text(
-                    '${event.location} - ${results.likeCountFor('event', event.id)} likes',
+                    joinNonEmpty([
+                      event.locationLabel,
+                      '${results.likeCountFor('event', event.id)} likes',
+                    ], separator: ' • '),
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 11,

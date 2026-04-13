@@ -1,6 +1,6 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hazaribagh_pulse/models/category_model.dart';
 import 'package:hazaribagh_pulse/models/place_model.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseListingService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -47,202 +47,160 @@ class SupabaseListingService {
     return merged;
   }
 
-  Future<Map<String, String>> _fetchCategoryNamesById() async {
-    final response = await _supabase.from('categories').select();
+  Future<Map<String, String>> _fetchActiveCategoryNamesById() async {
+    final response = await _supabase
+        .from('categories')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('manual_rank', ascending: true)
+        .order('name', ascending: true);
     final rows = (response as List).cast<Map<String, dynamic>>();
 
     return {
       for (final row in rows)
-        if (row['id'] != null)
-          row['id'].toString():
-              (row['name'] ?? row['title'] ?? row['label'] ?? 'Category').toString(),
+        if (row['id'] != null) row['id'].toString(): (row['name'] ?? 'Category').toString(),
     };
   }
 
   Future<List<CategoryModel>> getAllCategories() async {
-    try {
-      final response = await _supabase
-          .from('categories')
-          .select()
-          .order('display_order', ascending: true)
-          .order('name', ascending: true);
-      final rows = (response as List).cast<Map<String, dynamic>>();
-      return rows.map(CategoryModel.fromJson).toList();
-    } catch (_) {
-      final response = await _supabase.from('categories').select();
-      final rows = (response as List).cast<Map<String, dynamic>>();
-      final categories = rows.map(CategoryModel.fromJson).toList();
-      categories.sort((a, b) {
-        final orderCompare = a.displayOrder.compareTo(b.displayOrder);
-        if (orderCompare != 0) return orderCompare;
-        return a.name.compareTo(b.name);
-      });
-      return categories;
-    }
+    final response = await _supabase
+        .from('categories')
+        .select()
+        .eq('is_active', true)
+        .order('manual_rank', ascending: true)
+        .order('name', ascending: true);
+
+    final rows = (response as List).cast<Map<String, dynamic>>();
+    return rows.map(CategoryModel.fromJson).toList();
   }
 
   Future<List<PlaceModel>> _fetchListings({
-    String? orderBy,
-    bool ascending = false,
-    String? secondaryOrderBy,
-    bool secondaryAscending = false,
-    bool? sponsoredOnly,
-    bool? verifiedOnly,
     int? maxResults,
+    bool featuredOnly = false,
+    bool excludeFeatured = false,
+    String? categoryId,
+    bool? verifiedOnly,
   }) async {
-    try {
-      final categoryNamesById = await _fetchCategoryNamesById();
-      dynamic query = _supabase.from('listings').select();
+    final categoryNamesById = await _fetchActiveCategoryNamesById();
+    dynamic query = _supabase.from('listings').select().eq('status', 'active');
 
-      if (sponsoredOnly != null) {
-        query = query.eq('is_sponsored', sponsoredOnly);
-      }
-      if (verifiedOnly != null) {
-        query = query.eq('is_verified', verifiedOnly);
-      }
-      if (orderBy != null) {
-        query = query.order(orderBy, ascending: ascending);
-      }
-      if (secondaryOrderBy != null) {
-        query = query.order(secondaryOrderBy, ascending: secondaryAscending);
-      }
-      if (maxResults != null) {
-        query = query.limit(maxResults);
-      }
-
-      final response = await query;
-      final rows = (response as List).cast<Map<String, dynamic>>();
-      final profilesById = await _fetchProfilesByUserIds(
-        rows.map((row) => row['user_id']?.toString() ?? ''),
-      );
-      return rows
-          .map(
-            (data) => _mergeListingWithCategory(
-              data,
-              categoryNamesById,
-              profilesById: profilesById,
-            ),
-          )
-          .map(PlaceModel.fromJson)
-          .toList();
-    } catch (e) {
-      throw Exception('Failed to fetch listings: $e');
+    if (featuredOnly) {
+      query = query.eq('is_featured', true);
     }
+    if (excludeFeatured) {
+      query = query.eq('is_featured', false);
+    }
+    if (verifiedOnly != null) {
+      query = query.eq('is_verified', verifiedOnly);
+    }
+    if (categoryId != null && categoryId.isNotEmpty) {
+      query = query.eq('category_id', _normalizedId(categoryId));
+    }
+
+    query = query
+        .order('is_featured', ascending: false)
+        .order('manual_rank', ascending: true)
+        .order('created_at', ascending: false);
+
+    if (maxResults != null) {
+      query = query.limit(maxResults);
+    }
+
+    final response = await query;
+    final rows = (response as List).cast<Map<String, dynamic>>();
+    final profilesById = await _fetchProfilesByUserIds(
+      rows.map((row) => row['user_id']?.toString() ?? ''),
+    );
+
+    final listings = rows
+        .map(
+          (data) => _mergeListingWithCategory(
+            data,
+            categoryNamesById,
+            profilesById: profilesById,
+          ),
+        )
+        .map(PlaceModel.fromJson)
+        .toList();
+
+    listings.sort((a, b) {
+      final featuredCompare = (b.isFeatured ? 1 : 0).compareTo(a.isFeatured ? 1 : 0);
+      if (featuredCompare != 0) return featuredCompare;
+      final rankCompare = a.manualRank.compareTo(b.manualRank);
+      if (rankCompare != 0) return rankCompare;
+      return (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+          .compareTo(a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0));
+    });
+
+    return listings;
   }
 
-  Future<List<PlaceModel>> getAllListings() async {
-    return _fetchListings();
+  Future<List<PlaceModel>> getAllListings({int? limit}) async {
+    return _fetchListings(maxResults: limit);
   }
 
-  Future<List<PlaceModel>> getTrendingListings({int limit = 8}) async {
-    try {
-      final listings = await _fetchListings(
-        orderBy: 'is_sponsored',
-        ascending: false,
-        secondaryOrderBy: 'rating',
-        secondaryAscending: false,
-        maxResults: limit,
-      );
-      listings.sort((a, b) {
-        final sponsoredCompare =
-            (b.isSponsored ? 1 : 0).compareTo(a.isSponsored ? 1 : 0);
-        if (sponsoredCompare != 0) return sponsoredCompare;
-        final ratingCompare = b.rating.compareTo(a.rating);
-        if (ratingCompare != 0) return ratingCompare;
-        return b.reviewCount.compareTo(a.reviewCount);
-      });
-      return listings.take(limit).toList();
-    } catch (e) {
-      throw Exception('Failed to fetch trending listings: $e');
-    }
+  Future<List<PlaceModel>> getFeaturedListings({int limit = 8}) async {
+    return _fetchListings(maxResults: limit, featuredOnly: true);
   }
 
-  Future<List<PlaceModel>> getTopRatedListings({int limit = 8}) async {
-    try {
-      final listings = await _fetchListings(
-        orderBy: 'rating',
-        ascending: false,
-        secondaryOrderBy: 'review_count',
-        secondaryAscending: false,
-        verifiedOnly: true,
-        maxResults: limit,
-      );
-      listings.sort((a, b) {
-        final ratingCompare = b.rating.compareTo(a.rating);
-        if (ratingCompare != 0) return ratingCompare;
-        return b.reviewCount.compareTo(a.reviewCount);
-      });
-      return listings.take(limit).toList();
-    } catch (e) {
-      throw Exception('Failed to fetch top rated listings: $e');
-    }
+  Future<List<PlaceModel>> getRankedListings({int limit = 8}) async {
+    return _fetchListings(maxResults: limit);
   }
 
-  Future<List<PlaceModel>> getHiddenGemListings({int limit = 8}) async {
-    try {
-      final listings = await _fetchListings(
-        orderBy: 'review_count',
-        ascending: true,
-        secondaryOrderBy: 'created_at',
-        secondaryAscending: false,
-        maxResults: limit * 2,
-      );
-      final filtered = listings.where((place) => !place.isSponsored).toList();
-      return filtered.take(limit).toList();
-    } catch (e) {
-      throw Exception('Failed to fetch hidden gems: $e');
-    }
+  Future<List<PlaceModel>> getCategoryListings(
+    String categoryId, {
+    int? limit,
+  }) async {
+    return _fetchListings(categoryId: categoryId, maxResults: limit);
   }
 
   Future<PlaceModel> getListingById(String id) async {
-    try {
-      final categoryNamesById = await _fetchCategoryNamesById();
-      final data = await _supabase
-          .from('listings')
-          .select()
-          .eq('id', _normalizedId(id))
-          .maybeSingle();
-      if (data == null) {
-        throw Exception('Listing not found');
-      }
-      final profilesById = await _fetchProfilesByUserIds([
-        data['user_id']?.toString() ?? '',
-      ]);
-      return PlaceModel.fromJson(
-        _mergeListingWithCategory(
-          Map<String, dynamic>.from(data),
-          categoryNamesById,
-          profilesById: profilesById,
-        ),
-      );
-    } catch (e) {
-      throw Exception('Failed to fetch listing details: $e');
+    final categoryNamesById = await _fetchActiveCategoryNamesById();
+    final data = await _supabase
+        .from('listings')
+        .select()
+        .eq('id', _normalizedId(id))
+        .eq('status', 'active')
+        .maybeSingle();
+    if (data == null) {
+      throw Exception('Listing not found');
     }
+
+    final profilesById = await _fetchProfilesByUserIds([
+      data['user_id']?.toString() ?? '',
+    ]);
+
+    return PlaceModel.fromJson(
+      _mergeListingWithCategory(
+        Map<String, dynamic>.from(data),
+        categoryNamesById,
+        profilesById: profilesById,
+      ),
+    );
   }
 
   Future<List<PlaceModel>> getListingsByUserId(String userId) async {
-    try {
-      final categoryNamesById = await _fetchCategoryNamesById();
-      final response = await _supabase
-          .from('listings')
-          .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: false);
+    final categoryNamesById = await _fetchActiveCategoryNamesById();
+    final response = await _supabase
+        .from('listings')
+        .select()
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .order('is_featured', ascending: false)
+        .order('manual_rank', ascending: true)
+        .order('created_at', ascending: false);
 
-      final rows = (response as List).cast<Map<String, dynamic>>();
-      final profilesById = await _fetchProfilesByUserIds([userId]);
-      return rows
-          .map(
-            (data) => _mergeListingWithCategory(
-              data,
-              categoryNamesById,
-              profilesById: profilesById,
-            ),
-          )
-          .map(PlaceModel.fromJson)
-          .toList();
-    } catch (e) {
-      throw Exception('Failed to fetch user listings: $e');
-    }
+    final rows = (response as List).cast<Map<String, dynamic>>();
+    final profilesById = await _fetchProfilesByUserIds([userId]);
+    return rows
+        .map(
+          (data) => _mergeListingWithCategory(
+            data,
+            categoryNamesById,
+            profilesById: profilesById,
+          ),
+        )
+        .map(PlaceModel.fromJson)
+        .toList();
   }
 }

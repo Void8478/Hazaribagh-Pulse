@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/screens/auth_loading_screen.dart';
+import '../../features/admin/screens/admin_panel_screen.dart';
 import '../../features/auth/screens/email_login_screen.dart';
 import '../../features/auth/screens/email_signup_screen.dart';
 import '../../features/auth/screens/email_verification_screen.dart';
@@ -44,6 +45,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         isAuthenticated: value.isAuthenticated,
         initializationError: value.initializationError,
         emailVerificationPending: value.emailVerificationPending,
+        hasProfile: value.profile != null,
+        hasResolvedAdminFlag:
+            value.profile != null &&
+            (value.profile!.containsKey('is_admin') ||
+                value.profile!.containsKey('isAdmin')),
+        isAdmin:
+            value.profile?['is_admin'] == true ||
+            value.profile?['isAdmin'] == true,
       ),
     ),
   );
@@ -57,6 +66,8 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final currentPath = state.matchedLocation;
       final isAuthenticated = auth.isAuthenticated;
+      final isAdminRoute = currentPath == '/admin';
+      final isAdminDeniedRoute = currentPath == '/admin-denied';
       final isAuthFlow = currentPath == '/splash' ||
           currentPath == '/onboarding' ||
           currentPath == '/login' ||
@@ -96,6 +107,20 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       if (isAuthenticated && isAuthFlow) {
         return '/';
+      }
+
+      if (isAdminRoute) {
+        if (auth.isInitializing || (!auth.hasProfile && auth.isLoading)) {
+          return '/splash';
+        }
+
+        if (auth.hasResolvedAdminFlag && !auth.isAdmin) {
+          return '/admin-denied';
+        }
+      }
+
+      if (isAdminDeniedRoute && auth.isAdmin) {
+        return '/admin';
       }
 
       return null;
@@ -152,6 +177,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/feedback',
         builder: (context, state) => const SendFeedbackScreen(),
+      ),
+      GoRoute(
+        path: '/admin',
+        builder: (context, state) => const AdminPanelScreen(),
+      ),
+      GoRoute(
+        path: '/admin-denied',
+        builder: (context, state) => const _AdminDeniedScreen(),
       ),
       GoRoute(
         path: '/users/:userId',
@@ -259,5 +292,55 @@ class _VerifyEmailWrapper extends ConsumerWidget {
     final email =
         ref.watch(authProvider.select((value) => value.pendingEmail)) ?? '';
     return EmailVerificationScreen(email: email);
+  }
+}
+
+class _AdminDeniedScreen extends StatelessWidget {
+  const _AdminDeniedScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Access Denied')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.lock_outline_rounded,
+                size: 56,
+                color: colorScheme.primary,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'You do not have admin access.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'This area is only available for accounts with profiles.is_admin enabled.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: () => context.go('/profile'),
+                child: const Text('Back to Profile'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

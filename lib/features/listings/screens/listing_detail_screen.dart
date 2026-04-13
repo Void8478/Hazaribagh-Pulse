@@ -41,7 +41,7 @@ class ListingDetailScreen extends ConsumerWidget {
           ),
         ),
         data: (place) {
-          final images = place.imageUrls.isNotEmpty ? place.imageUrls : [place.imageUrl];
+          final images = place.hasImage ? [place.primaryImageUrl, ...place.imageUrls] : <String>[];
 
           return CustomScrollView(
             slivers: [
@@ -50,33 +50,40 @@ class ListingDetailScreen extends ConsumerWidget {
                 expandedHeight: 250,
                 pinned: true,
                 flexibleSpace: FlexibleSpaceBar(
-                  background: PageView.builder(
-                    itemCount: images.length,
-                    itemBuilder: (context, index) {
-                      return Image.network(
-                        images[index],
-                        fit: BoxFit.cover,
-                        filterQuality: FilterQuality.low,
-                        cacheWidth: 1200,
-                        gaplessPlayback: true,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return ColoredBox(
-                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                            child: const Center(
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          );
-                        },
-                        errorBuilder: (context, error, stackTrace) => ColoredBox(
+                  background: images.isEmpty
+                      ? ColoredBox(
                           color: Theme.of(context).colorScheme.surfaceContainerHighest,
                           child: const Center(
-                            child: Icon(Icons.image_not_supported_outlined),
+                            child: Icon(Icons.storefront_rounded, size: 48),
                           ),
+                        )
+                      : PageView.builder(
+                          itemCount: images.length,
+                          itemBuilder: (context, index) {
+                            return Image.network(
+                              images[index],
+                              fit: BoxFit.cover,
+                              filterQuality: FilterQuality.low,
+                              cacheWidth: 1200,
+                              gaplessPlayback: true,
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return ColoredBox(
+                                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                  child: const Center(
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                );
+                              },
+                              errorBuilder: (context, error, stackTrace) => ColoredBox(
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                child: const Center(
+                                  child: Icon(Icons.image_not_supported_outlined),
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
                 ),
                 actions: [
                   Consumer(
@@ -100,7 +107,9 @@ class ListingDetailScreen extends ConsumerWidget {
                             ),
                           Consumer(builder: (context, ref, _) {
                             final userLikes = ref.watch(userLikesProvider).value ?? {};
-                            final isLiked = userLikes.contains(listingId);
+                            final isLiked = userLikes.contains(
+                              interactionKey('place', listingId),
+                            );
                             return IconButton(
                               icon: Icon(
                                 isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
@@ -121,7 +130,9 @@ class ListingDetailScreen extends ConsumerWidget {
                           }),
                           Consumer(builder: (context, ref, _) {
                             final userBookmarks = ref.watch(userBookmarksProvider).value ?? {};
-                            final isBookmarked = userBookmarks.contains(listingId);
+                            final isBookmarked = userBookmarks.contains(
+                              interactionKey('place', listingId),
+                            );
                             return IconButton(
                               icon: Icon(
                                 isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
@@ -161,6 +172,28 @@ class ListingDetailScreen extends ConsumerWidget {
                       // Badges Row
                       Row(
                         children: [
+                          InfoChip(
+                            icon: Icons.category_rounded,
+                            label: place.categoryLabel,
+                            color: Theme.of(context).colorScheme.secondary,
+                            backgroundColor: Theme.of(context)
+                                .colorScheme
+                                .secondary
+                                .withValues(alpha: 0.12),
+                          ),
+                          const SizedBox(width: 8),
+                          if (place.isFeatured) ...[
+                            InfoChip(
+                              icon: Icons.workspace_premium_rounded,
+                              label: 'Featured',
+                              color: Theme.of(context).colorScheme.primary,
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.1),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
                           if (place.isSponsored) ...[
                             const InfoChip(
                               icon: Icons.star,
@@ -179,7 +212,7 @@ class ListingDetailScreen extends ConsumerWidget {
                             ),
                         ],
                       ),
-                      if (place.isSponsored || place.isVerified) const SizedBox(height: 12),
+                      const SizedBox(height: 12),
 
                       // Title
                       Text(
@@ -211,7 +244,9 @@ class ListingDetailScreen extends ConsumerWidget {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              place.address.isNotEmpty ? place.address : 'Address not available',
+                              place.fullAddressLabel.isNotEmpty
+                                  ? place.fullAddressLabel
+                                  : 'Address not available',
                               style: TextStyle(color: Colors.grey.shade700),
                             ),
                           ),
@@ -223,16 +258,30 @@ class ListingDetailScreen extends ConsumerWidget {
                           const Icon(Icons.access_time, color: Colors.grey, size: 20),
                           const SizedBox(width: 8),
                           Text(
-                            place.openingHours,
+                            place.openingHoursLabel,
                             style: TextStyle(color: Colors.grey.shade700),
                           ),
                           const Spacer(),
-                          Text(
-                            place.priceRange,
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
-                          ),
+                          if (place.priceRange.isNotEmpty)
+                            Text(
+                              place.priceRange,
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                            ),
                         ],
                       ),
+                      if (place.phone.trim().isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.call_outlined, color: Colors.grey, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              place.phone,
+                              style: TextStyle(color: Colors.grey.shade700),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 24),
 
                       // Action Buttons
@@ -246,7 +295,7 @@ class ListingDetailScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        place.description,
+                        place.descriptionLabel,
                         style: TextStyle(height: 1.5, color: Colors.grey.shade800),
                       ),
                       const SizedBox(height: 32),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../comments/services/supabase_comment_service.dart';
+import '../../../core/utils/content_display.dart';
 import '../../comments/widgets/comment_section.dart';
 import '../../listings/widgets/info_chip.dart';
 import '../providers/event_providers.dart';
@@ -13,12 +14,6 @@ class EventDetailScreen extends ConsumerWidget {
 
   const EventDetailScreen({super.key, required this.eventId});
 
-  String _formatDate(DateTime date) {
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const weekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-    return '${weekdayNames[date.weekday - 1]}, ${monthNames[date.month - 1]} ${date.day}, ${date.year}';
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final eventAsyncValue = ref.watch(eventDetailProvider(eventId));
@@ -26,14 +21,14 @@ class EventDetailScreen extends ConsumerWidget {
     
     final userLikes = ref.watch(userLikesProvider).value ?? {};
     final userBookmarks = ref.watch(userBookmarksProvider).value ?? {};
-    final isLiked = userLikes.contains(eventId);
-    final isBookmarked = userBookmarks.contains(eventId);
+    final isLiked = userLikes.contains(interactionKey('event', eventId));
+    final isBookmarked = userBookmarks.contains(interactionKey('event', eventId));
     
     final likeCountAsync = ref.watch(itemLikeCountProvider('event:$eventId'));
     final likeCount = likeCountAsync.value ?? 0;
 
     return Scaffold(
-      body: eventAsyncValue.when(
+                      body: eventAsyncValue.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(
           child: Column(
@@ -56,10 +51,27 @@ class EventDetailScreen extends ConsumerWidget {
                 expandedHeight: 250,
                 pinned: true,
                 flexibleSpace: FlexibleSpaceBar(
-                  background: Image.network(
-                    event.imageUrl,
-                    fit: BoxFit.cover,
-                  ),
+                  background: event.imageUrl.trim().isEmpty
+                      ? ColoredBox(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          child: const Center(
+                            child: Icon(Icons.event_outlined, size: 64),
+                          ),
+                        )
+                      : Image.network(
+                          event.imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              ColoredBox(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            child: const Center(
+                              child: Icon(
+                                Icons.image_not_supported_outlined,
+                                size: 48,
+                              ),
+                            ),
+                          ),
+                        ),
                 ),
                 actions: [
                   if (likeCount > 0)
@@ -124,16 +136,28 @@ class EventDetailScreen extends ConsumerWidget {
                     children: [
                       Row(
                         children: [
+                          if (event.isFeatured) ...[
+                            InfoChip(
+                              icon: Icons.workspace_premium_rounded,
+                              label: 'Featured',
+                              color: Theme.of(context).colorScheme.primary,
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.1),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
                           InfoChip(
                             icon: Icons.category,
-                            label: event.category,
+                            label: event.categoryLabel,
                             color: Theme.of(context).colorScheme.primary,
                             backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                           ),
                           const SizedBox(width: 8),
                           InfoChip(
                             icon: Icons.local_activity,
-                            label: event.isFree ? 'Free Event' : event.price,
+                            label: event.priceLabel,
                             color: event.isFree ? Colors.green : Colors.orange,
                             backgroundColor: event.isFree ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
                           ),
@@ -150,17 +174,29 @@ class EventDetailScreen extends ConsumerWidget {
                         name: event.creator.displayName,
                         username: event.creator.username,
                         avatarUrl: event.creator.avatarUrl,
-                        subtitle: event.organizer,
+                        subtitle: event.organizerLabel,
                       ),
                       const SizedBox(height: 24),
-                      _buildIconRow(context, Icons.calendar_today, 'Date and Time', '${_formatDate(event.date)}\n${event.time}'),
+                      _buildIconRow(
+                        context,
+                        Icons.calendar_today,
+                        'Date and Time',
+                        '${formatLongDate(event.startDateOrNull)}\n${event.timeLabel}',
+                      ),
                       const SizedBox(height: 16),
-                      _buildIconRow(context, Icons.location_on, 'Location', '${event.location}\n${event.address}'),
+                      _buildIconRow(
+                        context,
+                        Icons.location_on,
+                        'Location',
+                        event.fullLocationLabel.isEmpty
+                            ? 'Location will be announced'
+                            : event.fullLocationLabel,
+                      ),
                       const SizedBox(height: 32),
                       const Text('About this event', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
                       Text(
-                        event.description,
+                        event.descriptionLabel,
                         style: TextStyle(height: 1.5, color: Colors.grey.shade800, fontSize: 16),
                       ),
                       const SizedBox(height: 32),
@@ -204,14 +240,19 @@ class EventDetailScreen extends ConsumerWidget {
                 child: FilledButton(
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('RSVP / Get Tickets logic would go here.')),
+                      const SnackBar(
+                        content: Text('RSVP is not available in this build yet.'),
+                      ),
                     );
                   },
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('Get Tickets / RSVP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    'Get Tickets / RSVP',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],

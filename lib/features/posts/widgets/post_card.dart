@@ -23,8 +23,11 @@ class PostCard extends ConsumerWidget {
     final likesAsync = ref.watch(userLikesProvider);
     final bookmarksAsync = ref.watch(userBookmarksProvider);
 
-    final isLiked = likesAsync.value?.contains(post.id) ?? false;
-    final isBookmarked = bookmarksAsync.value?.contains(post.id) ?? false;
+    final isLiked =
+        likesAsync.value?.contains(interactionKey('post', post.id)) ?? false;
+    final isBookmarked = bookmarksAsync.value
+            ?.contains(interactionKey('post', post.id)) ??
+        false;
 
     return GestureDetector(
       onTap: () => context.push('/post/${post.id}'),

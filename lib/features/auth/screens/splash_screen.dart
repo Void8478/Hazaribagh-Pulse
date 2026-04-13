@@ -54,19 +54,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           : _authTransitionMinimumDuration,
     );
     _startTimeoutTimer();
-    debugPrint('[SplashScreen] loading page shown');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _startupRequested) return;
       final authState = ref.read(authProvider);
       if (authState.isInitializing) {
         ref.read(startupMinimumSplashDurationProvider.notifier).reset();
         _startupRequested = true;
-        debugPrint('[SplashScreen] startup function called');
         ref.read(authProvider.notifier).startBootstrapIfNeeded();
         return;
       }
-
-      debugPrint('[SplashScreen] transition loading animation shown');
     });
   }
 
@@ -82,7 +78,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _minimumSplashTimer?.cancel();
     _minimumSplashTimer = Timer(duration, () {
       if (!mounted) return;
-      debugPrint('[SplashScreen] minimum animation duration completed');
       ref.read(startupMinimumSplashDurationProvider.notifier).complete();
     });
   }
@@ -319,9 +314,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                                     onPressed: authState.isInitializing
                                         ? null
                                         : () {
-                                            debugPrint(
-                                              '[SplashScreen] retry function called',
-                                            );
                                             ref
                                                 .read(
                                                   startupMinimumSplashDurationProvider

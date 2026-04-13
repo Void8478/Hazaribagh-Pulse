@@ -9,7 +9,9 @@ import '../../../core/widgets/section_header.dart';
 import '../../../models/event_model.dart';
 import '../../../models/place_model.dart';
 import '../../events/widgets/event_card.dart';
+import '../../events/providers/event_providers.dart';
 import '../providers/home_providers.dart';
+import '../../listings/providers/listing_providers.dart';
 import '../../notifications/widgets/notification_bell_button.dart';
 import '../../posts/widgets/post_card.dart';
 import '../../../models/post_model.dart';
@@ -163,10 +165,10 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final trendingAsync = ref.watch(homeTrendingListingsProvider);
-    final topRatedAsync = ref.watch(homeTopRatedListingsProvider);
+    final featuredAsync = ref.watch(homeFeaturedListingsProvider);
+    final rankedAsync = ref.watch(homeRankedListingsProvider);
+    final categorySectionsAsync = ref.watch(homeCategorySectionsProvider);
     final eventsAsync = ref.watch(homeUpcomingEventsProvider);
-    final hiddenGemsAsync = ref.watch(homeHiddenGemListingsProvider);
     final postsAsync = ref.watch(homeRecentPostsProvider);
 
     return Scaffold(
@@ -183,12 +185,25 @@ class HomeScreen extends ConsumerWidget {
           const NotificationBellButton(),
         ],
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(homeFeaturedListingsProvider);
+          ref.invalidate(homeRankedListingsProvider);
+          ref.invalidate(homeCategorySectionsProvider);
+          ref.invalidate(homeUpcomingEventsProvider);
+          ref.invalidate(homeRecentPostsProvider);
+          ref.invalidate(allCategoriesProvider);
+          ref.invalidate(allListingsProvider);
+          ref.invalidate(allEventsProvider);
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             Padding(
               padding: const EdgeInsets.all(16),
               child: InkWell(
@@ -271,52 +286,79 @@ class HomeScreen extends ConsumerWidget {
                   : _buildPostsList(posts),
             ),
             SectionHeader(
-              title: 'Trending Near You',
-              subtitle: 'Places locals are opening, sharing, and saving right now.',
+              title: 'Featured Places',
+              subtitle: 'Hand-picked listings promoted first by your manual ranking controls.',
               onSeeAll: () => context.go('/explore'),
             ),
-            trendingAsync.when(
+            featuredAsync.when(
               loading: () => _buildPlaceRailLoader(context),
               error: (err, _) => _buildSectionError(
                 context,
                 ref,
-                'Could not load trending places',
-                homeTrendingListingsProvider,
+                'Could not load featured places',
+                homeFeaturedListingsProvider,
               ),
               data: (places) => places.isEmpty
                   ? _buildSectionEmpty(
-                      Icons.local_fire_department_outlined,
-                      'No trending places yet',
-                      'Fresh local recommendations will appear here.',
+                      Icons.workspace_premium_outlined,
+                      'No featured places yet',
+                      'Featured local listings will appear here once ranked.',
                     )
                   : _buildHorizontalList(places),
             ),
             const SizedBox(height: 16),
             SectionHeader(
-              title: 'Top Rated Services',
-              subtitle: 'Reliable places with strong reviews and repeat trust.',
+              title: 'Top Picks',
+              subtitle: 'Active listings sorted by featured state, manual rank, and freshness.',
               onSeeAll: () => context.go('/explore'),
             ),
-            topRatedAsync.when(
+            rankedAsync.when(
               loading: () => _buildPlaceRailLoader(context),
               error: (err, _) => _buildSectionError(
                 context,
                 ref,
-                'Could not load top rated places',
-                homeTopRatedListingsProvider,
+                'Could not load top picks',
+                homeRankedListingsProvider,
               ),
               data: (places) => places.isEmpty
                   ? _buildSectionEmpty(
-                      Icons.star_outline_rounded,
-                      'No top rated places yet',
-                      'Ratings and reviews will surface the best spots here.',
+                      Icons.storefront_outlined,
+                      'No ranked places yet',
+                      'Active places will appear here once ranking is configured.',
                     )
                   : _buildHorizontalList(places),
             ),
             const SizedBox(height: 16),
+            categorySectionsAsync.when(
+              loading: () => const SizedBox.shrink(),
+              error: (err, _) => _buildSectionError(
+                context,
+                ref,
+                'Could not load category spotlights',
+                homeCategorySectionsProvider,
+              ),
+              data: (sections) => Column(
+                children: sections.map((section) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SectionHeader(
+                        title: section.category.name,
+                        subtitle: 'Best active listings in this category, ordered manually.',
+                        onSeeAll: () => context.go(
+                          '/explore/category/${Uri.encodeComponent(section.category.name)}',
+                        ),
+                      ),
+                      _buildHorizontalList(section.listings),
+                      const SizedBox(height: 16),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
             SectionHeader(
               title: 'Upcoming Events',
-              subtitle: 'A quick look at what is happening soon in the city.',
+              subtitle: 'Active events ordered by featured state, manual rank, and start date.',
               onSeeAll: () => context.go('/events'),
             ),
             eventsAsync.when(
@@ -335,30 +377,9 @@ class HomeScreen extends ConsumerWidget {
                     )
                   : _buildEventsList(events),
             ),
-            const SizedBox(height: 24),
-            SectionHeader(
-              title: 'Hidden Gems',
-              subtitle: 'Quiet favorites worth discovering before everyone else finds them.',
-              onSeeAll: () => context.go('/explore'),
-            ),
-            hiddenGemsAsync.when(
-              loading: () => _buildPlaceRailLoader(context),
-              error: (err, _) => _buildSectionError(
-                context,
-                ref,
-                'Could not load hidden gems',
-                homeHiddenGemListingsProvider,
-              ),
-              data: (places) => places.isEmpty
-                  ? _buildSectionEmpty(
-                      Icons.diamond_outlined,
-                      'No hidden gems yet',
-                      'Lower-profile local favorites will appear here.',
-                    )
-                  : _buildHorizontalList(places),
-            ),
             const SizedBox(height: 32),
-          ],
+            ],
+          ),
         ),
       ),
     );

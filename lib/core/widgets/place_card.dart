@@ -23,8 +23,11 @@ class PlaceCard extends ConsumerWidget {
     final likesAsync = ref.watch(userLikesProvider);
     final bookmarksAsync = ref.watch(userBookmarksProvider);
 
-    final isLiked = likesAsync.value?.contains(place.id) ?? false;
-    final isBookmarked = bookmarksAsync.value?.contains(place.id) ?? false;
+    final isLiked =
+        likesAsync.value?.contains(interactionKey('place', place.id)) ?? false;
+    final isBookmarked = bookmarksAsync.value
+            ?.contains(interactionKey('place', place.id)) ??
+        false;
 
     return GestureDetector(
       onTap: () => context.push('/listing/${place.id}'),
@@ -51,39 +54,50 @@ class PlaceCard extends ConsumerWidget {
           children: [
             Stack(
               children: [
-                Image.network(
-                  place.imageUrl,
-                  height: 132,
-                  width: width,
-                  fit: BoxFit.cover,
-                  filterQuality: FilterQuality.low,
-                  cacheWidth: 460,
-                  gaplessPlayback: true,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Container(
+                if (place.hasImage)
+                  Image.network(
+                    place.primaryImageUrl,
+                    height: 132,
+                    width: width,
+                    fit: BoxFit.cover,
+                    filterQuality: FilterQuality.low,
+                    cacheWidth: 460,
+                    gaplessPlayback: true,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 132,
+                        width: width,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              colorScheme.surfaceContainerHighest,
+                              colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) => Container(
                       height: 132,
                       width: width,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            colorScheme.surfaceContainerHighest,
-                            colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
-                          ],
-                        ),
+                      color: colorScheme.surfaceContainerHighest,
+                      child: Icon(
+                        Icons.image_not_supported_outlined,
+                        color: colorScheme.onSurfaceVariant,
                       ),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) => Container(
+                    ),
+                  )
+                else
+                  Container(
                     height: 132,
                     width: width,
                     color: colorScheme.surfaceContainerHighest,
                     child: Icon(
-                      Icons.image_not_supported_outlined,
+                      Icons.storefront_rounded,
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
-                ),
                 Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
@@ -106,6 +120,12 @@ class PlaceCard extends ConsumerWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
+                      if (place.isFeatured)
+                        _TopBadge(
+                          label: 'Featured',
+                          background: const Color(0xFFF2F5FF),
+                          foreground: const Color(0xFF1D3B7A),
+                        ),
                       if (place.isSponsored)
                         _TopBadge(
                           label: 'Sponsored',
@@ -121,32 +141,33 @@ class PlaceCard extends ConsumerWidget {
                     ],
                   ),
                 ),
-                Positioned(
-                  right: 12,
-                  bottom: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.58),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.star_rounded, color: Color(0xFFF8D66D), size: 14),
-                        const SizedBox(width: 4),
-                        Text(
-                          place.rating.toStringAsFixed(1),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
+                if (place.hasRating)
+                  Positioned(
+                    right: 12,
+                    bottom: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.58),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.star_rounded, color: Color(0xFFF8D66D), size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            place.rating.toStringAsFixed(1),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
             Padding(
@@ -168,8 +189,13 @@ class PlaceCard extends ConsumerWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
+                      if (place.isFeatured)
+                        _InfoChip(
+                          label: 'Featured',
+                          icon: Icons.workspace_premium_rounded,
+                        ),
                       _InfoChip(
-                        label: place.category,
+                        label: place.categoryLabel,
                         icon: Icons.category_outlined,
                       ),
                       if (place.priceRange.isNotEmpty)
@@ -187,7 +213,7 @@ class PlaceCard extends ConsumerWidget {
                     avatarUrl: place.creator.avatarUrl,
                     compact: true,
                   ),
-                  if (place.address.isNotEmpty) ...[
+                  if (place.locationLabel.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Row(
                       children: [
@@ -199,7 +225,7 @@ class PlaceCard extends ConsumerWidget {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            place.address,
+                            place.locationLabel,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall?.copyWith(
@@ -215,7 +241,9 @@ class PlaceCard extends ConsumerWidget {
                   Row(
                     children: [
                       Text(
-                        '${place.reviewCount} reviews',
+                        place.hasRating
+                            ? '${place.reviewCount} reviews'
+                            : 'New listing',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                           fontWeight: FontWeight.w600,
@@ -341,6 +369,7 @@ class _InfoChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final compactLabel = label.trim();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -353,7 +382,7 @@ class _InfoChip extends StatelessWidget {
           Icon(icon, size: 13, color: colorScheme.onSurfaceVariant),
           const SizedBox(width: 6),
           Text(
-            label,
+            compactLabel,
             style: TextStyle(
               color: colorScheme.onSurfaceVariant,
               fontSize: 11.5,

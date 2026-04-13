@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,15 +11,19 @@ import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
 
-const String _defaultSupabaseUrl = 'https://beudtyljcymeeklihshg.supabase.co';
-const String _defaultSupabaseAnonKey =
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJldWR0eWxqY3ltZWVrbGloc2hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MjY3OTYsImV4cCI6MjA5MTIwMjc5Nn0.APkYQf3k3xacQY89PnAmgQIrSVyhPJSFCZ8ALZhby2E';
+String _requiredDartDefine(String key) {
+  final value = String.fromEnvironment(key).trim();
+  if (value.isEmpty) {
+    throw FormatException(
+      'Missing required build configuration: $key. Pass it with '
+      '--dart-define=$key=...',
+    );
+  }
+  return value;
+}
 
 String _resolveSupabaseUrl() {
-  final rawUrl = const String.fromEnvironment(
-    'SUPABASE_URL',
-    defaultValue: _defaultSupabaseUrl,
-  ).trim();
+  final rawUrl = _requiredDartDefine('SUPABASE_URL');
 
   final uri = Uri.tryParse(rawUrl);
   if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
@@ -49,10 +54,7 @@ String _resolveSupabaseUrl() {
 }
 
 String _resolveSupabaseAnonKey() {
-  final rawKey = const String.fromEnvironment(
-    'SUPABASE_ANON_KEY',
-    defaultValue: _defaultSupabaseAnonKey,
-  ).trim();
+  final rawKey = _requiredDartDefine('SUPABASE_ANON_KEY');
 
   if (rawKey.isEmpty) {
     throw const FormatException('Supabase anon key is missing.');
@@ -100,19 +102,16 @@ void main() async {
   late final SharedPreferences prefs;
 
   try {
-    debugPrint('Starting Hazaribagh Pulse initialization...');
-
     await Supabase.initialize(
       url: _resolveSupabaseUrl(),
       anonKey: _resolveSupabaseAnonKey(),
     );
-    debugPrint('Supabase initialized.');
-
     prefs = await SharedPreferences.getInstance();
-    debugPrint('SharedPreferences initialized.');
   } catch (e, stack) {
-    debugPrint('Critical startup error: $e');
-    debugPrint('Stacktrace: $stack');
+    if (kDebugMode) {
+      debugPrint('Critical startup error: $e');
+      debugPrint('Stacktrace: $stack');
+    }
     runApp(StartupErrorApp(error: e.toString()));
     return;
   }

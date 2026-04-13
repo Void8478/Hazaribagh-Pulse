@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../../models/place_model.dart';
+
 import '../../../../models/event_model.dart';
-import '../services/supabase_bookmark_service.dart';
+import '../../../../models/place_model.dart';
+import '../../../core/network/supabase_client.dart';
+import '../../interactions/providers/interaction_providers.dart';
 import '../repositories/bookmark_repository.dart';
-import '../../../core/utils/mock_data.dart';
-import '../../profile/providers/profile_providers.dart';
+import '../services/supabase_bookmark_service.dart';
 
 final bookmarkServiceProvider = Provider<SupabaseBookmarkService>((ref) {
   return SupabaseBookmarkService();
@@ -16,51 +16,52 @@ final bookmarkRepositoryProvider = Provider<BookmarkRepository>((ref) {
   return BookmarkRepository(service);
 });
 
-// Fetch full Place objects based on saved place IDs
 final savedPlacesProvider = FutureProvider<List<PlaceModel>>((ref) async {
-  final supabase = Supabase.instance.client;
-  final userProfile = await ref.watch(userProfileProvider.future);
-  if (userProfile == null || userProfile.savedPlaceIds.isEmpty) {
+  final supabase = ref.watch(supabaseClientProvider);
+  final savedKeys = await ref.watch(userBookmarksProvider.future);
+  final savedIds = savedKeys
+      .where((key) => key.startsWith('place:'))
+      .map((key) => key.substring('place:'.length))
+      .toList();
+
+  if (savedIds.isEmpty) {
     return [];
   }
 
-  final chunk = userProfile.savedPlaceIds.take(10).toList();
-  
+  final chunk = savedIds.take(20).toList();
   final response = await supabase
       .from('listings')
       .select()
       .filter('id', 'in', chunk);
-      
-  return (response as List).map((data) => PlaceModel.fromJson(data as Map<String, dynamic>)).toList();
+
+  final places = (response as List)
+      .map((data) => PlaceModel.fromJson(data as Map<String, dynamic>))
+      .toList();
+  places.sort((a, b) => chunk.indexOf(a.id).compareTo(chunk.indexOf(b.id)));
+  return places;
 });
 
-// Fetch saved events — tries Supabase first, falls back to mock data
 final savedEventsProvider = FutureProvider<List<EventModel>>((ref) async {
-  final supabase = Supabase.instance.client;
-  final userProfile = await ref.watch(userProfileProvider.future);
-  if (userProfile == null || userProfile.savedEventIds.isEmpty) {
+  final supabase = ref.watch(supabaseClientProvider);
+  final savedKeys = await ref.watch(userBookmarksProvider.future);
+  final savedIds = savedKeys
+      .where((key) => key.startsWith('event:'))
+      .map((key) => key.substring('event:'.length))
+      .toList();
+
+  if (savedIds.isEmpty) {
     return [];
   }
 
-  final savedIds = userProfile.savedEventIds;
+  final chunk = savedIds.take(20).toList();
+  final response = await supabase
+      .from('events')
+      .select()
+      .filter('id', 'in', chunk);
 
-  // Try Supabase first
-  try {
-    final chunk = savedIds.take(10).toList();
-    final response = await supabase
-        .from('events')
-        .select()
-        .filter('id', 'in', chunk);
-
-    if (response.isNotEmpty) {
-      return response.map((data) => EventModel.fromJson(data)).toList();
-    }
-  } catch (_) {
-    // Supabase events collection may not exist yet — fall through to mock
-  }
-
-  // Fallback: filter mock events by saved IDs
-  return MockData.mockEvents
-      .where((e) => savedIds.contains(e.id))
+  final events = (response as List)
+      .map((data) => EventModel.fromJson(data as Map<String, dynamic>))
       .toList();
+  events.sort((a, b) => chunk.indexOf(a.id).compareTo(chunk.indexOf(b.id)));
+  return events;
 });

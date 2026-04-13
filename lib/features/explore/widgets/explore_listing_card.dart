@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/place_model.dart';
-import '../../bookmarks/providers/bookmark_providers.dart';
-import '../../profile/providers/profile_providers.dart';
 import '../../auth/services/auth_provider.dart';
+import '../../interactions/providers/interaction_providers.dart';
 
 class ExploreListingCard extends ConsumerWidget {
   final PlaceModel place;
@@ -20,8 +19,8 @@ class ExploreListingCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasAuth = ref.watch(authProvider.select((value) => value.isAuthenticated));
-    final userProfile = ref.watch(userProfileProvider);
-    final isSaved = userProfile.value?.savedPlaceIds.contains(place.id) ?? false;
+    final savedKeys = ref.watch(userBookmarksProvider).value ?? const <String>{};
+    final isSaved = savedKeys.contains(interactionKey('place', place.id));
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
@@ -54,29 +53,37 @@ class ExploreListingCard extends ConsumerWidget {
               borderRadius: const BorderRadius.vertical(top: Radius.circular(19)),
               child: Stack(
                 children: [
-                  Image.network(
-                    place.imageUrl,
-                    height: 140,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    filterQuality: FilterQuality.low,
-                    cacheWidth: 640,
-                    gaplessPlayback: true,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
+                  if (place.hasImage)
+                    Image.network(
+                      place.primaryImageUrl,
+                      height: 140,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      filterQuality: FilterQuality.low,
+                      cacheWidth: 640,
+                      gaplessPlayback: true,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          height: 140,
+                          width: double.infinity,
+                          color: colorScheme.surfaceContainerHighest,
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) => Container(
                         height: 140,
                         width: double.infinity,
                         color: colorScheme.surfaceContainerHighest,
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) => Container(
+                        child: Icon(Icons.image_not_supported, color: colorScheme.onSurfaceVariant),
+                      ),
+                    )
+                  else
+                    Container(
                       height: 140,
                       width: double.infinity,
                       color: colorScheme.surfaceContainerHighest,
-                      child: Icon(Icons.image_not_supported, color: colorScheme.onSurfaceVariant),
+                      child: Icon(Icons.storefront_rounded, color: colorScheme.onSurfaceVariant),
                     ),
-                  ),
                   // Dark gradient from bottom for contrast when white text is placed there
                   Positioned.fill(
                     child: DecoratedBox(
@@ -107,7 +114,7 @@ class ExploreListingCard extends ConsumerWidget {
                         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                       ),
                       child: Text(
-                        place.category,
+                        place.categoryLabel,
                         style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -123,19 +130,23 @@ class ExploreListingCard extends ConsumerWidget {
                     right: 8,
                     child: _BookmarkButton(
                       isSaved: isSaved,
-                      onPressed: () {
+                      onPressed: () async {
                         if (!hasAuth) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Please log in to save places!')),
                           );
                           return;
                         }
-                        final user = userProfile.value;
-                        if (user != null) {
-                          ref.read(bookmarkRepositoryProvider).toggleSavedPlace(
-                            user.id,
-                            place.id,
-                            !isSaved,
+                        try {
+                          await ref
+                              .read(userBookmarksProvider.notifier)
+                              .toggleBookmark(place.id, 'place');
+                        } catch (_) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Could not update your saved places right now.'),
+                            ),
                           );
                         }
                       },
@@ -192,14 +203,14 @@ class ExploreListingCard extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 8),
-                  if (place.address.isNotEmpty)
+                  if (place.locationLabel.isNotEmpty)
                     Row(
                       children: [
                         Icon(Icons.location_on_rounded, size: 14, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8)),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            place.address,
+                            place.locationLabel,
                             style: TextStyle(
                               color: colorScheme.onSurfaceVariant,
                               fontSize: 12,
@@ -215,24 +226,34 @@ class ExploreListingCard extends ConsumerWidget {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Icon(Icons.star_rounded, color: colorScheme.primary, size: 18),
-                      const SizedBox(width: 4),
-                      Text(
-                        place.rating.toStringAsFixed(1),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: colorScheme.onSurface,
+                      if (place.hasRating) ...[
+                        Icon(Icons.star_rounded, color: colorScheme.primary, size: 18),
+                        const SizedBox(width: 4),
+                        Text(
+                          place.rating.toStringAsFixed(1),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: colorScheme.onSurface,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '(${place.reviewCount})',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colorScheme.onSurfaceVariant,
+                        const SizedBox(width: 4),
+                        Text(
+                          '(${place.reviewCount})',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
                         ),
-                      ),
+                      ] else
+                        Text(
+                          'New listing',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                       const Spacer(),
                       if (place.priceRange.isNotEmpty)
                         Container(

@@ -58,24 +58,33 @@ class CategoryResultsScreen extends ConsumerWidget {
             );
           }
 
-          return ListView.builder(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.only(
-              top: 16.0,
-              left: 16.0,
-              right: 16.0,
-              bottom: 32.0,
-            ),
-            itemCount: places.length,
-            itemBuilder: (context, index) {
-              return AnimatedListItem(
-                delay: index * 80,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 12.0),
-                  child: PlaceCard(place: places[index], width: double.infinity),
-                ),
-              );
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(categoryListingsProvider(categoryName));
+              ref.invalidate(allListingsProvider);
+              ref.invalidate(allCategoriesProvider);
             },
+            child: ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              padding: const EdgeInsets.only(
+                top: 16.0,
+                left: 16.0,
+                right: 16.0,
+                bottom: 32.0,
+              ),
+              itemCount: places.length,
+              itemBuilder: (context, index) {
+                return AnimatedListItem(
+                  delay: index * 80,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: PlaceCard(place: places[index], width: double.infinity),
+                  ),
+                );
+              },
+            ),
           );
         },
       ),

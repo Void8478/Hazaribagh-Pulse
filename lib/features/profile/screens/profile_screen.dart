@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/widgets/place_card.dart';
+import '../../admin/providers/admin_providers.dart';
 import '../../auth/services/auth_provider.dart';
 import '../../bookmarks/providers/bookmark_providers.dart';
 import '../../events/widgets/event_card.dart';
@@ -19,26 +21,43 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  ProviderSubscription<AuthState>? _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSubscription = ref.listenManual<AuthState>(authProvider, (
+      previous,
+      next,
+    ) {
+      if (!mounted || next.error == null || previous?.error == next.error) {
+        return;
+      }
+
+      final colorScheme = Theme.of(context).colorScheme;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(next.error!),
+          backgroundColor: colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.close();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final authState = ref.watch(authProvider);
 
-    ref.listen<AuthState>(authProvider, (previous, next) {
-      final messenger = ScaffoldMessenger.of(context);
-
-      if (next.error != null && previous?.error != next.error) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(next.error!),
-            backgroundColor: colorScheme.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    });
-
     final userProfileAsync = ref.watch(userProfileProvider);
+    final hasAdminAccess = ref.watch(adminAccessProvider);
     final savedPlacesAsync = ref.watch(savedPlacesProvider);
     final savedEventsAsync = ref.watch(savedEventsProvider);
     final accountActionInFlight =
@@ -218,6 +237,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         UserReviewsSection(userId: user.id),
                         const SizedBox(height: 32),
                         ProfileMenuTiles(
+                          showAdminPanel: hasAdminAccess,
+                          onOpenAdminPanel: () => context.push('/admin'),
                           onLogout: accountActionInFlight
                               ? () {}
                               : () => _showLogoutDialog(context),

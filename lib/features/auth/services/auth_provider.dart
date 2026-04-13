@@ -660,7 +660,9 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   void _logStep(String message) {
-    debugPrint('[AuthBootstrap] $message');
+    if (kDebugMode) {
+      debugPrint('[AuthBootstrap] $message');
+    }
   }
 
   Future<void> signInWithGoogle() async {
@@ -840,7 +842,9 @@ class AuthNotifier extends Notifier<AuthState> {
             location: '',
           );
         } catch (profileErr) {
-          debugPrint('Profile insert skipped: $profileErr');
+          if (kDebugMode) {
+            debugPrint('Profile insert skipped: $profileErr');
+          }
         }
       }
 
@@ -919,7 +923,7 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   void markAppReady() {
-    state = state.copyWith(readyForApp: false);
+    state = state.copyWith(readyForApp: true);
   }
 
   Future<void> retryInitialization() {

@@ -30,8 +30,23 @@ final listingDetailProvider = FutureProvider.family<PlaceModel, String>((ref, id
 });
 
 final categoryListingsProvider = FutureProvider.family<List<PlaceModel>, String>((ref, category) async {
-  final allListings = await ref.watch(allListingsProvider.future);
-  return allListings.where((place) => place.category == category).toList();
+  final categories = await ref.watch(allCategoriesProvider.future);
+  CategoryModel? matchedCategory;
+  for (final item in categories) {
+    if (item.name == category) {
+      matchedCategory = item;
+      break;
+    }
+  }
+
+  if (matchedCategory == null) {
+    final allListings = await ref.watch(allListingsProvider.future);
+    return allListings.where((place) => place.category == category).toList();
+  }
+
+  return ref
+      .watch(listingRepositoryProvider)
+      .fetchCategoryListings(matchedCategory.id);
 });
 
 final filteredListingsProvider = FutureProvider<List<PlaceModel>>((ref) async {

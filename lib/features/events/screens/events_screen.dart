@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/widgets/premium_empty_state.dart';
+import '../../listings/providers/listing_providers.dart';
 import '../providers/event_providers.dart';
 import '../widgets/event_card.dart';
 import '../widgets/event_category_chips.dart';
@@ -19,17 +20,25 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   @override
   Widget build(BuildContext context) {
     final allEventsAsync = ref.watch(allEventsProvider);
+    final categoriesAsync = ref.watch(allCategoriesProvider);
     final eventsAsync = ref.watch(categoryEventsProvider(_selectedCategory));
 
-    final categories = allEventsAsync.maybeWhen(
-      data: (events) {
-        final unique = events
-            .map((event) => event.category)
-            .where((category) => category.trim().isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
-        return ['All', ...unique];
+    final categories = categoriesAsync.maybeWhen(
+      data: (categories) {
+        final eventCategories = allEventsAsync.maybeWhen(
+          data: (events) => events
+              .map((event) => event.category)
+              .where((category) => category.trim().isNotEmpty)
+              .toSet(),
+          orElse: () => <String>{},
+        );
+
+        final ordered = categories
+            .where((category) => eventCategories.contains(category.name))
+            .map((category) => category.name)
+            .toList();
+
+        return ['All', ...ordered];
       },
       orElse: () => const ['All'],
     );
@@ -74,12 +83,22 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                   );
                 }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: filteredEvents.length,
-                  itemBuilder: (context, index) {
-                    return EventCard(event: filteredEvents[index]);
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    ref.invalidate(allEventsProvider);
+                    ref.invalidate(categoryEventsProvider);
+                    ref.invalidate(allCategoriesProvider);
                   },
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: filteredEvents.length,
+                    itemBuilder: (context, index) {
+                      return EventCard(event: filteredEvents[index]);
+                    },
+                  ),
                 );
               },
             ),

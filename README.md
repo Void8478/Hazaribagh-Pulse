@@ -130,15 +130,31 @@ flutter pub get
 ```
 
 **3. Configure Supabase Environment**
-Add your Supabase URL and Anon Key to your configuration safely (often inside `lib/core/network/supabase_client.dart` or via a `.env` depending on your environment setup).
-*Never commit your internal `.env` files to source control.*
+This app reads Supabase configuration from Dart defines at startup.
+
+Create `.vscode/dart_defines.json` by copying `.vscode/dart_defines.json.example`, then replace the placeholder values:
+
+```json
+{
+  "SUPABASE_URL": "https://YOUR_PROJECT_REF.supabase.co",
+  "SUPABASE_ANON_KEY": "YOUR_SUPABASE_ANON_KEY"
+}
+```
+
+Then run the included VS Code launch configuration, or start manually with:
+
+```bash
+flutter run --dart-define-from-file=.vscode/dart_defines.json
+```
+
+`SUPABASE_ANON_KEY` must be the public anon key from Supabase Project Settings, not the `service_role` key.
 
 **4. Execute SQL Migrations**
 Open your Supabase SQL Editor and sequentially run the `.sql` files found within the `supabase/migrations` folder to build out the application schema, enable Row Level Security (RLS), and attach the proper policies.
 
 **5. Launch The App**
 ```bash
-flutter run
+flutter run --dart-define-from-file=.vscode/dart_defines.json
 ```
 
 ---

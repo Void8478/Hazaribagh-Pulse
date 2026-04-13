@@ -94,9 +94,9 @@ class _CreatePlaceScreenState extends ConsumerState<CreatePlaceScreen> {
 
       ref.invalidate(allListingsProvider);
       ref.invalidate(filteredListingsProvider);
-      ref.invalidate(homeTrendingListingsProvider);
-      ref.invalidate(homeTopRatedListingsProvider);
-      ref.invalidate(homeHiddenGemListingsProvider);
+      ref.invalidate(homeFeaturedListingsProvider);
+      ref.invalidate(homeRankedListingsProvider);
+      ref.invalidate(homeCategorySectionsProvider);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

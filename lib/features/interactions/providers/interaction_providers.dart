@@ -1,6 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../auth/services/auth_provider.dart';
 import '../services/supabase_interaction_service.dart';
+
+String interactionKey(String contentType, String contentId) =>
+    '$contentType:$contentId';
 
 final interactionServiceProvider = Provider<SupabaseInteractionService>((ref) {
   return SupabaseInteractionService();
@@ -20,12 +25,17 @@ class UserLikesNotifier extends AsyncNotifier<Set<String>> {
 
   @override
   Future<Set<String>> build() async {
+    ref.watch(authProvider.select((value) => value.user?.id));
     final service = ref.watch(interactionServiceProvider);
     try {
       final postLikes = await service.getUserLikes('post');
       final placeLikes = await service.getUserLikes('place');
       final eventLikes = await service.getUserLikes('event');
-      return {...postLikes, ...placeLikes, ...eventLikes};
+      return {
+        ...postLikes.map((id) => interactionKey('post', id)),
+        ...placeLikes.map((id) => interactionKey('place', id)),
+        ...eventLikes.map((id) => interactionKey('event', id)),
+      };
     } catch (_) {
       return {};
     }
@@ -36,24 +46,22 @@ class UserLikesNotifier extends AsyncNotifier<Set<String>> {
       throw Exception('auth_required');
     }
 
+    final key = interactionKey(contentType, contentId);
     final currentLikes = state.value ?? {};
-    final isLiking = !currentLikes.contains(contentId);
+    final isLiking = !currentLikes.contains(key);
 
-    // Optimistic UI Update
     if (isLiking) {
-      state = AsyncValue.data({...currentLikes, contentId});
+      state = AsyncValue.data({...currentLikes, key});
     } else {
-      state = AsyncValue.data(
-          Set.from(currentLikes)..remove(contentId));
+      state = AsyncValue.data(Set<String>.from(currentLikes)..remove(key));
     }
 
-    // Background Database update
     try {
-      await ref.read(interactionServiceProvider).toggleLike(contentId, contentType, isLiking);
-      // Invalidate count provider so it instantly refetches Live count
+      await ref
+          .read(interactionServiceProvider)
+          .toggleLike(contentId, contentType, isLiking);
       ref.invalidate(itemLikeCountProvider('$contentType:$contentId'));
     } catch (err, stack) {
-      // Revert on failure
       state = AsyncValue.data(currentLikes);
       state = AsyncValue.error(err, stack);
       rethrow;
@@ -70,12 +78,17 @@ class UserBookmarksNotifier extends AsyncNotifier<Set<String>> {
 
   @override
   Future<Set<String>> build() async {
+    ref.watch(authProvider.select((value) => value.user?.id));
     final service = ref.watch(interactionServiceProvider);
     try {
       final postSaves = await service.getUserBookmarks('post');
       final placeSaves = await service.getUserBookmarks('place');
       final eventSaves = await service.getUserBookmarks('event');
-      return {...postSaves, ...placeSaves, ...eventSaves};
+      return {
+        ...postSaves.map((id) => interactionKey('post', id)),
+        ...placeSaves.map((id) => interactionKey('place', id)),
+        ...eventSaves.map((id) => interactionKey('event', id)),
+      };
     } catch (_) {
       return {};
     }
@@ -86,22 +99,21 @@ class UserBookmarksNotifier extends AsyncNotifier<Set<String>> {
       throw Exception('auth_required');
     }
 
+    final key = interactionKey(contentType, contentId);
     final currentSaves = state.value ?? {};
-    final isSaving = !currentSaves.contains(contentId);
+    final isSaving = !currentSaves.contains(key);
 
-    // Optimistic UI Update
     if (isSaving) {
-      state = AsyncValue.data({...currentSaves, contentId});
+      state = AsyncValue.data({...currentSaves, key});
     } else {
-      state = AsyncValue.data(
-          Set.from(currentSaves)..remove(contentId));
+      state = AsyncValue.data(Set<String>.from(currentSaves)..remove(key));
     }
 
-    // Background Database update
     try {
-      await ref.read(interactionServiceProvider).toggleBookmark(contentId, contentType, isSaving);
+      await ref
+          .read(interactionServiceProvider)
+          .toggleBookmark(contentId, contentType, isSaving);
     } catch (err, stack) {
-      // Revert on failure
       state = AsyncValue.data(currentSaves);
       state = AsyncValue.error(err, stack);
       rethrow;

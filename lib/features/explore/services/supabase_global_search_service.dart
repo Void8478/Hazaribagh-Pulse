@@ -9,8 +9,15 @@ import '../providers/explore_providers.dart';
 class SupabaseGlobalSearchService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
+  Object _normalizedId(String id) => int.tryParse(id) ?? id;
+
   Future<Map<String, String>> _fetchCategoryIdsByName() async {
-    final response = await _supabase.from('categories').select('id, name');
+    final response = await _supabase
+        .from('categories')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('manual_rank', ascending: true)
+        .order('name', ascending: true);
     final rows = (response as List).cast<Map<String, dynamic>>();
     return {
       for (final row in rows)
@@ -20,7 +27,12 @@ class SupabaseGlobalSearchService {
   }
 
   Future<Map<String, String>> _fetchCategoryNamesById() async {
-    final response = await _supabase.from('categories').select('id, name');
+    final response = await _supabase
+        .from('categories')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('manual_rank', ascending: true)
+        .order('name', ascending: true);
     final rows = (response as List).cast<Map<String, dynamic>>();
     return {
       for (final row in rows)
@@ -118,6 +130,27 @@ class SupabaseGlobalSearchService {
     return score + popularity + rating;
   }
 
+  int _comparePromotedPlaces(PlaceModel a, PlaceModel b) {
+    final featuredCompare = (b.isFeatured ? 1 : 0).compareTo(a.isFeatured ? 1 : 0);
+    if (featuredCompare != 0) return featuredCompare;
+
+    final rankCompare = a.manualRank.compareTo(b.manualRank);
+    if (rankCompare != 0) return rankCompare;
+
+    return (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+        .compareTo(a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0));
+  }
+
+  int _comparePromotedEvents(EventModel a, EventModel b) {
+    final featuredCompare = (b.isFeatured ? 1 : 0).compareTo(a.isFeatured ? 1 : 0);
+    if (featuredCompare != 0) return featuredCompare;
+
+    final rankCompare = a.manualRank.compareTo(b.manualRank);
+    if (rankCompare != 0) return rankCompare;
+
+    return a.sortDate.compareTo(b.sortDate);
+  }
+
   Future<ExploreSearchBundle> search({
     required String query,
     required String? categoryName,
@@ -195,10 +228,10 @@ class SupabaseGlobalSearchService {
     required bool sponsoredOnly,
     required int limit,
   }) async {
-    dynamic query = _supabase.from('listings').select();
+    dynamic query = _supabase.from('listings').select().eq('status', 'active');
 
     if (categoryId != null) {
-      query = query.eq('category_id', categoryId);
+      query = query.eq('category_id', _normalizedId(categoryId));
     }
     if (verifiedOnly) {
       query = query.eq('is_verified', true);
@@ -208,23 +241,27 @@ class SupabaseGlobalSearchService {
     }
     if (locationQuery.isNotEmpty) {
       query = query.or(
-        'location.ilike.%$locationQuery%,address.ilike.%$locationQuery%',
+        'location.ilike.%$locationQuery%,address.ilike.%$locationQuery%,city.ilike.%$locationQuery%,area.ilike.%$locationQuery%',
       );
     }
     if (searchQuery.isNotEmpty) {
       query = query.or(
-        'name.ilike.%$searchQuery%,title.ilike.%$searchQuery%,description.ilike.%$searchQuery%,address.ilike.%$searchQuery%,location.ilike.%$searchQuery%',
+        'name.ilike.%$searchQuery%,title.ilike.%$searchQuery%,description.ilike.%$searchQuery%,address.ilike.%$searchQuery%,location.ilike.%$searchQuery%,city.ilike.%$searchQuery%,area.ilike.%$searchQuery%',
       );
     }
 
-    query = query.order('created_at', ascending: false).limit(limit);
+    query = query
+        .order('is_featured', ascending: false)
+        .order('manual_rank', ascending: true)
+        .order('created_at', ascending: false)
+        .limit(limit);
     final response = await query;
     final rows = (response as List).cast<Map<String, dynamic>>();
     final profilesById = await _fetchProfilesByIds(
       rows.map((row) => row['user_id']?.toString() ?? ''),
     );
 
-    return rows.map((row) {
+    final places = rows.map((row) {
       final merged = Map<String, dynamic>.from(row);
       final resolvedCategoryId = row['category_id']?.toString();
       final userId = row['user_id']?.toString();
@@ -238,7 +275,24 @@ class SupabaseGlobalSearchService {
         merged['profiles'] = profilesById[userId];
       }
       return PlaceModel.fromJson(merged);
+    }).where((place) {
+      if (searchQuery.isEmpty) {
+        return true;
+      }
+
+      final haystack = [
+        place.name,
+        place.categoryLabel,
+        place.description,
+        place.location,
+        place.address,
+        place.city,
+        place.area,
+      ].join(' ').toLowerCase();
+      return haystack.contains(searchQuery.toLowerCase());
     }).toList();
+
+    return places;
   }
 
   Future<List<PostModel>> _searchPosts({
@@ -253,7 +307,7 @@ class SupabaseGlobalSearchService {
         .eq('status', 'published');
 
     if (categoryId != null) {
-      query = query.eq('category_id', categoryId);
+      query = query.eq('category_id', _normalizedId(categoryId));
     }
     if (locationQuery.isNotEmpty) {
       query = query.ilike('location', '%$locationQuery%');
@@ -271,7 +325,7 @@ class SupabaseGlobalSearchService {
       rows.map((row) => row['user_id']?.toString() ?? ''),
     );
 
-    return rows.map((row) {
+    final posts = rows.map((row) {
       final merged = Map<String, dynamic>.from(row);
       final userId = row['user_id']?.toString();
       if (userId != null) {
@@ -279,6 +333,8 @@ class SupabaseGlobalSearchService {
       }
       return PostModel.fromJson(merged);
     }).toList();
+
+    return posts;
   }
 
   Future<List<EventModel>> _searchEvents({
@@ -289,31 +345,33 @@ class SupabaseGlobalSearchService {
     required ExploreEventTiming eventTiming,
     required int limit,
   }) async {
-    dynamic query = _supabase.from('events').select('*, categories(id, name)');
+    dynamic query = _supabase.from('events').select('*, categories(id, name)').eq('status', 'active');
     final now = DateTime.now().toUtc().toIso8601String();
 
     if (categoryId != null) {
-      query = query.eq('category_id', categoryId);
+      query = query.eq('category_id', _normalizedId(categoryId));
     }
     if (locationQuery.isNotEmpty) {
       query = query.or(
-        'location.ilike.%$locationQuery%,address.ilike.%$locationQuery%',
+        'location.ilike.%$locationQuery%,address.ilike.%$locationQuery%,city.ilike.%$locationQuery%,area.ilike.%$locationQuery%',
       );
     }
     if (eventTiming == ExploreEventTiming.upcomingOnly) {
-      query = query.gte('date', now);
+      query = query.gte('start_date', now);
     } else if (eventTiming == ExploreEventTiming.pastOnly) {
-      query = query.lt('date', now);
+      query = query.lt('start_date', now);
     }
     if (searchQuery.isNotEmpty) {
       query = query.or(
-        'title.ilike.%$searchQuery%,description.ilike.%$searchQuery%,location.ilike.%$searchQuery%,organizer.ilike.%$searchQuery%,address.ilike.%$searchQuery%',
+        'title.ilike.%$searchQuery%,description.ilike.%$searchQuery%,location.ilike.%$searchQuery%,organizer.ilike.%$searchQuery%,address.ilike.%$searchQuery%,city.ilike.%$searchQuery%,area.ilike.%$searchQuery%,category.ilike.%$searchQuery%',
       );
     }
 
     query = query
+        .order('is_featured', ascending: false)
+        .order('manual_rank', ascending: true)
         .order(
-          'date',
+          'start_date',
           ascending: eventTiming == ExploreEventTiming.pastOnly,
         )
         .limit(limit);
@@ -343,6 +401,22 @@ class SupabaseGlobalSearchService {
         merged['profiles'] = profilesById[userId];
       }
       return EventModel.fromJson(merged);
+    }).where((event) {
+      if (searchQuery.isEmpty) {
+        return true;
+      }
+
+      final haystack = [
+        event.title,
+        event.categoryLabel,
+        event.description,
+        event.location,
+        event.address,
+        event.city,
+        event.area,
+        event.organizer,
+      ].join(' ').toLowerCase();
+      return haystack.contains(searchQuery.toLowerCase());
     }).toList();
   }
 
@@ -355,6 +429,7 @@ class SupabaseGlobalSearchService {
     switch (sortMode) {
       case ExploreSortMode.mostRelevant:
         places.sort((a, b) {
+          final promotedCompare = _comparePromotedPlaces(a, b);
           final aScore = _relevanceScore(
             query: query,
             primaryFields: [a.name, a.category],
@@ -369,23 +444,35 @@ class SupabaseGlobalSearchService {
             popularity: (likeCounts['place:${b.id}'] ?? 0) * 4,
             rating: (b.rating * 10).round(),
           );
+          if (promotedCompare != 0) return promotedCompare;
           if (bScore != aScore) return bScore.compareTo(aScore);
+          return _comparePromotedPlaces(a, b);
+        });
+        break;
+      case ExploreSortMode.newestFirst:
+        places.sort((a, b) {
+          final promotedCompare = _comparePromotedPlaces(a, b);
+          if (promotedCompare != 0) return promotedCompare;
           return (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
               .compareTo(a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0));
         });
         break;
-      case ExploreSortMode.newestFirst:
-        places.sort((a, b) => (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
-            .compareTo(a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)));
-        break;
       case ExploreSortMode.oldestFirst:
-        places.sort((a, b) => (a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
-            .compareTo(b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)));
+        places.sort((a, b) {
+          final featuredCompare = (b.isFeatured ? 1 : 0).compareTo(a.isFeatured ? 1 : 0);
+          if (featuredCompare != 0) return featuredCompare;
+          final rankCompare = a.manualRank.compareTo(b.manualRank);
+          if (rankCompare != 0) return rankCompare;
+          return (a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+              .compareTo(b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0));
+        });
         break;
       case ExploreSortMode.mostPopular:
         places.sort((a, b) {
+          final promotedCompare = _comparePromotedPlaces(a, b);
           final aPopularity = (likeCounts['place:${a.id}'] ?? 0) + a.reviewCount;
           final bPopularity = (likeCounts['place:${b.id}'] ?? 0) + b.reviewCount;
+          if (promotedCompare != 0) return promotedCompare;
           if (bPopularity != aPopularity) {
             return bPopularity.compareTo(aPopularity);
           }
@@ -394,6 +481,8 @@ class SupabaseGlobalSearchService {
         break;
       case ExploreSortMode.highestRated:
         places.sort((a, b) {
+          final promotedCompare = _comparePromotedPlaces(a, b);
+          if (promotedCompare != 0) return promotedCompare;
           final ratingCompare = b.rating.compareTo(a.rating);
           if (ratingCompare != 0) return ratingCompare;
           return b.reviewCount.compareTo(a.reviewCount);
@@ -458,6 +547,7 @@ class SupabaseGlobalSearchService {
     switch (sortMode) {
       case ExploreSortMode.mostRelevant:
         events.sort((a, b) {
+          final promotedCompare = _comparePromotedEvents(a, b);
           final aScore = _relevanceScore(
             query: query,
             primaryFields: [a.title, a.category],
@@ -470,23 +560,36 @@ class SupabaseGlobalSearchService {
             secondaryFields: [b.description, b.location, b.organizer, b.address],
             popularity: (likeCounts['event:${b.id}'] ?? 0) * 5,
           );
+          if (promotedCompare != 0) return promotedCompare;
           if (bScore != aScore) return bScore.compareTo(aScore);
-          return b.date.compareTo(a.date);
+          return _comparePromotedEvents(a, b);
         });
         break;
       case ExploreSortMode.newestFirst:
-        events.sort((a, b) => b.date.compareTo(a.date));
+        events.sort((a, b) {
+          final promotedCompare = _comparePromotedEvents(a, b);
+          if (promotedCompare != 0) return promotedCompare;
+          return b.sortDate.compareTo(a.sortDate);
+        });
         break;
       case ExploreSortMode.oldestFirst:
-        events.sort((a, b) => a.date.compareTo(b.date));
+        events.sort((a, b) {
+          final featuredCompare = (b.isFeatured ? 1 : 0).compareTo(a.isFeatured ? 1 : 0);
+          if (featuredCompare != 0) return featuredCompare;
+          final rankCompare = a.manualRank.compareTo(b.manualRank);
+          if (rankCompare != 0) return rankCompare;
+          return a.sortDate.compareTo(b.sortDate);
+        });
         break;
       case ExploreSortMode.mostPopular:
       case ExploreSortMode.highestRated:
         events.sort((a, b) {
+          final promotedCompare = _comparePromotedEvents(a, b);
+          if (promotedCompare != 0) return promotedCompare;
           final likeCompare = (likeCounts['event:${b.id}'] ?? 0)
               .compareTo(likeCounts['event:${a.id}'] ?? 0);
           if (likeCompare != 0) return likeCompare;
-          return a.date.compareTo(b.date);
+          return a.sortDate.compareTo(b.sortDate);
         });
         break;
     }

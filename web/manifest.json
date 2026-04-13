@@ -1,11 +1,11 @@
 {
-    "name": "hazaribagh_pulse",
-    "short_name": "hazaribagh_pulse",
+    "name": "Hazaribagh Pulse",
+    "short_name": "Pulse",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#071019",
+    "theme_color": "#071019",
+    "description": "Discover places, events, and community updates around Hazaribagh.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

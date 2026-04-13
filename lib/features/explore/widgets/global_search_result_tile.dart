@@ -28,6 +28,9 @@ class GlobalSearchResultTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final safeSubtitle =
+        subtitle.trim().isEmpty ? 'More details will appear here soon.' : subtitle.trim();
+    final safeMeta = meta.trim().isEmpty ? 'Details' : meta.trim();
 
     return InkWell(
       borderRadius: BorderRadius.circular(22),
@@ -81,7 +84,7 @@ class GlobalSearchResultTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    subtitle,
+                    safeSubtitle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -105,8 +108,8 @@ class GlobalSearchResultTile extends StatelessWidget {
                           color: accentColor.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(999),
                         ),
-                        child: Text(
-                          meta,
+                          child: Text(
+                          safeMeta,
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,

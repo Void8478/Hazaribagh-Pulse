@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/utils/content_display.dart';
 import '../../../../models/event_model.dart';
 import '../../interactions/providers/interaction_providers.dart';
 import '../../profile/widgets/public_profile_link.dart';
@@ -39,8 +40,15 @@ class EventCard extends ConsumerWidget {
     final likesAsync = ref.watch(userLikesProvider);
     final bookmarksAsync = ref.watch(userBookmarksProvider);
 
-    final isLiked = likesAsync.value?.contains(event.id) ?? false;
-    final isBookmarked = bookmarksAsync.value?.contains(event.id) ?? false;
+    final isLiked =
+        likesAsync.value?.contains(interactionKey('event', event.id)) ?? false;
+    final isBookmarked = bookmarksAsync.value
+            ?.contains(interactionKey('event', event.id)) ??
+        false;
+
+    final dateLabel = event.startDateOrNull == null
+        ? 'TBA'
+        : _getMonthName(event.startDate.month);
 
     return GestureDetector(
       onTap: () => context.push('/event/${event.id}'),
@@ -66,32 +74,44 @@ class EventCard extends ConsumerWidget {
           children: [
             Stack(
               children: [
-                Image.network(
-                  event.imageUrl,
-                  height: 182,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  filterQuality: FilterQuality.low,
-                  cacheWidth: 760,
-                  gaplessPlayback: true,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Container(
+                if (event.imageUrl.trim().isNotEmpty)
+                  Image.network(
+                    event.imageUrl,
+                    height: 182,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    filterQuality: FilterQuality.low,
+                    cacheWidth: 760,
+                    gaplessPlayback: true,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 182,
+                        width: double.infinity,
+                        color: colorScheme.surfaceContainerHighest,
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) => Container(
                       height: 182,
                       width: double.infinity,
                       color: colorScheme.surfaceContainerHighest,
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) => Container(
+                      child: Icon(
+                        Icons.image_not_supported_outlined,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                else
+                  Container(
                     height: 182,
                     width: double.infinity,
                     color: colorScheme.surfaceContainerHighest,
                     child: Icon(
-                      Icons.image_not_supported_outlined,
+                      Icons.event_rounded,
                       color: colorScheme.onSurfaceVariant,
+                      size: 40,
                     ),
                   ),
-                ),
                 Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
@@ -120,7 +140,7 @@ class EventCard extends ConsumerWidget {
                     child: Column(
                       children: [
                         Text(
-                          _getMonthName(event.date.month),
+                          dateLabel,
                           style: TextStyle(
                             color: colorScheme.primary,
                             fontSize: 10,
@@ -130,7 +150,7 @@ class EventCard extends ConsumerWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${event.date.day}',
+                          event.startDateOrNull == null ? '--' : '${event.startDate.day}',
                           style: TextStyle(
                             color: colorScheme.onSurface,
                             fontSize: 18,
@@ -153,7 +173,7 @@ class EventCard extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
-                      event.isFree ? 'Free entry' : event.price,
+                      event.priceLabel,
                       style: TextStyle(
                         color: event.isFree ? Colors.white : colorScheme.onPrimary,
                         fontSize: 11.5,
@@ -173,15 +193,26 @@ class EventCard extends ConsumerWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
+                      if (event.isFeatured)
+                        _EventPill(
+                          label: 'FEATURED',
+                          icon: Icons.workspace_premium_rounded,
+                          color: const Color(0xFF1D3B7A),
+                        ),
                       _EventPill(
-                        label: event.category.toUpperCase(),
+                        label: event.categoryLabel.toUpperCase(),
                         icon: Icons.sell_outlined,
                         color: colorScheme.secondary,
                       ),
                       _EventPill(
-                        label: event.time,
+                        label: event.timeLabel,
                         icon: Icons.schedule_rounded,
                         color: colorScheme.primary,
+                      ),
+                      _EventPill(
+                        label: formatMediumDate(event.startDateOrNull),
+                        icon: Icons.event_rounded,
+                        color: colorScheme.tertiary,
                       ),
                     ],
                   ),
@@ -202,7 +233,7 @@ class EventCard extends ConsumerWidget {
                     name: event.creator.displayName,
                     username: event.creator.username,
                     avatarUrl: event.creator.avatarUrl,
-                    subtitle: event.organizer,
+                    subtitle: event.organizerLabel,
                     compact: true,
                   ),
                   const SizedBox(height: 14),
@@ -217,7 +248,9 @@ class EventCard extends ConsumerWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          event.location,
+                          event.locationLabel.isEmpty
+                              ? 'Location will be announced'
+                              : event.locationLabel,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
